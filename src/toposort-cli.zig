@@ -8,18 +8,22 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const g_allocator = gpa.allocator();
 // const g_allocator = std.heap.page_allocator;
 
+const TopoSort = toposort.TopoSort([]const u8);
+
 
 pub fn main() !void {
-    std.debug.print("toposort.foo {}.\n", .{toposort.foo});
-
+    std.debug.print("\n", .{});
     var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
     const stdout = bw.writer();
 
-    // try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
     var args = try CmdArgs.parse(g_allocator);
     defer args.deinit();
-    try stdout.print("{s}, {s}, {s}, {}", .{ args.program, args.data_file, args.out_file, args.is_parallel });
+    try stdout.print("data_file: {s}, out_file: {s}, is_parallel: {}\n", .{ args.data_file, args.out_file, args.is_parallel });
+
+    const tsort = try TopoSort.init(g_allocator);
+    defer tsort.deinit();
+
+    try readData(args.data_file, tsort);
 
     try bw.flush();
 }
@@ -60,6 +64,50 @@ const CmdArgs = struct {
         return args;
     }
 };
+
+fn readData(data_file: []const u8, tsort: *TopoSort) !void {
+    const file = std.fs.cwd().openFile(data_file, .{ .mode = .read_only }) catch |err| {
+        print("Error {} on opening the file: {s}\n", .{err, data_file});
+        return err;
+    };
+    defer file.close();
+
+    var buf_reader = std.io.bufferedReader(file.reader());
+    const reader = buf_reader.reader();
+    var line_buf = std.ArrayList(u8).init(g_allocator);
+    defer line_buf.deinit();
+    const writer = line_buf.writer();
+
+    while (reader.streamUntilDelimiter(writer, '\n', null)) {
+        defer line_buf.clearRetainingCapacity();
+        const dependent, const required = parseLine(line_buf.items);
+        try tsort.add(dependent, required);
+    } else |err| switch (err) {
+        error.EndOfStream => { // end of file
+            if (line_buf.items.len > 0) {
+                const dependent, const required = parseLine(line_buf.items);
+                try tsort.add(dependent, required);
+            }
+        },
+        else => return err, // Propagate error
+    }
+}
+
+fn parseLine(line: []const u8) struct { []const u8, []const u8 } {
+    var tokens = std.mem.tokenizeScalar(u8, line, ',');
+    const term1 = tokens.next() orelse "";      // depending item
+    const term2 = tokens.next() orelse "";      // required item
+    const first = std.mem.trim(u8, term1, " \t\r\n");
+    const second = std.mem.trim(u8, term2, " \t\r\n");
+    
+    return .{ first, second };
+}
+
+inline fn print(comptime format: []const u8, args: anytype) void {
+    std.io.getStdOut().writer().print(format, args) catch |err| {
+        std.log.err("Error encountered while printing to stdout. Error: {any}", .{err});
+    };
+}
 
 
 test "simple test" {
