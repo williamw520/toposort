@@ -1,5 +1,5 @@
-a,b
-b,c
-a,c
-a,d
-c,d
+aa : bb
+bb : cc
+aa : cc
+aa : dd
+cc : dd

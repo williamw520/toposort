@@ -5,64 +5,170 @@ const ArrayList = std.ArrayList;
 
 
 pub fn TopoSort(comptime T: type) type {
+
+    const ItemMap = std.HashMap(T, u32, ItemHashCtx(T), std.hash_map.default_max_load_percentage);
+
     return struct {
         const Self = @This();
-        allocator:  Allocator,
-        ts_items:   ArrayList(T),       // the list of unique items.
-        dep_counts: ArrayList(u32),     // counts of dependents of each item.
+        allocator:      Allocator,
+        dependencies:   ArrayList(Dependency(T)),   // the list of dependency pairs.
+        unique_items:   ArrayList(T),               // the list of unique items.
+        item_map:       ItemMap,                    // map item (as key) to item id.
+        dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
+        incomings:      []u32,                      // counts of incoming leading links of each item.
 
         pub fn init(allocator: Allocator) !*Self {
             const obj_ptr = try allocator.create(Self);
             obj_ptr.* = Self {
                 .allocator = allocator,
-                .ts_items = ArrayList(T).init(allocator),
-                .dep_counts = ArrayList(u32).init(allocator),
+                .dependencies = ArrayList(Dependency(T)).init(allocator),
+                .item_map = ItemMap.init(allocator),
+                .unique_items = ArrayList(T).init(allocator),
+                .dependents = undefined,
+                .incomings = undefined,
             };
             return obj_ptr;
         }
 
         pub fn deinit(self: *Self) void {
-            for (self.ts_items.items, 0..) |item, index| {
-                std.debug.print("  free item: '{s}', index: {}\n", .{item, index});
-                self.allocator.free(item);
+            for (self.dependencies.items) |*dep| {
+                dep.deinit(self.allocator);
             }
-            defer self.ts_items.deinit();
-            defer self.dep_counts.deinit();
+            self.dependencies.deinit();
+            self.item_map.deinit();
+
+            for (self.unique_items.items, 0..) |item, index| {
+                var buf: [16]u8 = undefined;
+                const txt = value_as_str(T, item, &buf) catch "error as_str";
+                std.debug.print("  free item: {s}, index: {}\n", .{txt, index});
+                free_value(T, item, self.allocator);
+            }
+            self.unique_items.deinit();
+
+            for (self.dependents) |dep_list| {
+                dep_list.deinit();
+            }
+            self.allocator.free(self.dependents);
+            self.allocator.free(self.incomings);
         }
 
-        pub fn count(self: *Self) usize {
-            return self.ts_items.items.len;
+        fn item_count(self: *Self) usize {
+            return self.unique_items.items.len;
         }
 
-        pub fn add(self: *Self, dependent: T, required: T) !void {
-            std.debug.print("add(), dependent: '{s}' => required: '{s}'\n", .{dependent, required});
-            const dependent_id = try self.add_item(dependent);
-            const required_id = try self.add_item(required);
-            std.debug.print("  dependent_id: {} => required_id: {}\n", .{dependent_id, required_id});
+        pub fn add_dependency(self: *Self, leading: T, dependent: T) !void {
+            var buf1: [16]u8 = undefined;
+            var buf2: [16]u8 = undefined;
+            const leading_txt   = try value_as_str(T, leading, &buf1);
+            const dependent_txt = try value_as_str(T, dependent, &buf2);
+            std.debug.print("add(), leading: {s} => dependent: {s}\n", .{leading_txt, dependent_txt});
+            const dep = try Dependency(T).init(self.allocator, leading, dependent);
+            try self.dependencies.append(dep);
+        }
+
+        pub fn process(self: *Self) !void {
+            for (self.dependencies.items) |dep| {
+                const lead_id   = try self.add_item(dep.leading);
+                const dep_id    = try self.add_item(dep.dependent);
+                std.debug.print("  dep_id({}) : lead_id({})\n", .{dep_id, lead_id});
+            }
+            try self.alloc_dependents();
+            try self.add_dependents();
+            try self.alloc_incomings();
+            try self.add_incomings();
         }
 
         fn add_item(self: *Self, ts_item: T) !u32 {
-            for (self.ts_items.items, 0..) |item, id| {
-                if (equal(T, item, ts_item)) {
-                    std.debug.print("  found '{s}' at id: {}; skip.\n", .{ts_item, id});
-                    return @intCast(id);
+            var buf: [16]u8 = undefined;
+            const item_txt = value_as_str(T, ts_item, &buf) catch "error as_str";
+
+            if (self.item_map.get(ts_item)) |item_id| {
+                std.debug.print("  found {s} at id: {any}.\n", .{item_txt, item_id});
+                return item_id;
+            } else {
+                const dup_item = try dupe_value(T, ts_item, self.allocator);
+                try self.unique_items.append(dup_item);
+                const new_id: u32 = @intCast(self.item_count() - 1);
+                try self.item_map.put(ts_item, new_id);
+                std.debug.print("  added item: {s} at id: {}\n", .{item_txt, new_id});
+                return new_id;
+            }
+        }
+
+        fn alloc_dependents(self: *Self) !void {
+            self.dependents = try self.allocator.alloc(ArrayList(u32), self.item_count());
+            for (0..self.dependents.len) |i| {
+                self.dependents[i] = ArrayList(u32).init(self.allocator);
+            }
+        }
+
+        fn add_dependents(self: *Self) !void {
+            for (self.dependencies.items) |dep| {
+                const lead_id   = self.item_map.get(dep.leading);
+                const dep_id    = self.item_map.get(dep.dependent);
+                try self.add_dependent(lead_id.?, dep_id.?);
+            }
+            std.debug.print("  dependents: [", .{});
+            for (self.dependents) |list| {
+                std.debug.print(" {any} ", .{list.items});
+            }
+            std.debug.print(" ]\n", .{});
+        }
+
+        fn add_dependent(self: *Self, lead_id: u32, dep_id: u32) !void {
+            var list_ptr = &self.dependents[lead_id];
+            const found = std.mem.indexOfScalar(u32, list_ptr.items, dep_id);
+            if (found == null) {
+                try list_ptr.append(dep_id);
+            }
+        }
+
+        fn alloc_incomings(self: *Self) !void {
+            self.incomings = try self.allocator.alloc(u32, self.item_count());
+            @memset(self.incomings, 0);
+        }
+
+        fn add_incomings(self: *Self) !void {
+            for (self.dependents) |list| {  // each item leads a list of dependents.
+                for (list.items) |dep_id| { // all dep_id have one incoming from the leading item.
+                    self.incomings[dep_id] += 1;    
                 }
-            }            
-            const id = self.count();
-            const dup = try clone(T, self.allocator, ts_item); 
-            try self.ts_items.append(dup);
-            try self.dep_counts.append(0);
-            std.debug.print("  added item: '{s}' at id: {}\n", .{ts_item, id});
-            return @intCast(id);
+            }
+            std.debug.print("  incomings:  {any}\n", .{self.incomings});
         }
 
     };
-    
+
 }
 
-fn clone(comptime T: type, allocator: std.mem.Allocator, value: T) !T {
-    if (@typeInfo(T) == .Pointer) { 
-        // Dynamically allocated memory (e.g., strings, slices).
+// Define a dependency between a leading item and a dependent item.
+// The leading item needs to go first before the dependent item.
+fn Dependency(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        leading:    T,
+        dependent:  T,
+
+        // Create an object with cloned values, whose memory allocated with the allocator.
+        fn init(allocator: Allocator, leading: T, dependent: T) !Self {
+            return Self {
+                .leading = try dupe_value(T, leading, allocator),
+                .dependent = try dupe_value(T, dependent, allocator),
+            };
+        }
+
+        fn deinit(self: *Self, allocator: Allocator) void {
+            free_value(T, self.leading, allocator);
+            free_value(T, self.dependent, allocator);
+        }
+    };
+}
+
+/// Clone a value of type T.  If it's a Pointer type (strings, slices), allocate memory for it.
+/// Need to call free_value() on the duplicated value to free it.
+fn dupe_value(comptime T: type, value: T, allocator: std.mem.Allocator) !T {
+    if (@typeInfo(T) == .Pointer) {
+        // Dynamically allocate memory for pointer type (e.g. strings, slices).
         return try allocator.dupe(@typeInfo(T).Pointer.child, value);
     } else {
         // Primitive values and structs with no heap allocation.
@@ -70,11 +176,54 @@ fn clone(comptime T: type, allocator: std.mem.Allocator, value: T) !T {
     }
 }
 
-fn equal(comptime T: type, a: T, b: T) bool {
+/// Free a value of type T whose memory was allocated before.
+fn free_value(comptime T: type, value: T, allocator: std.mem.Allocator) void {
+    if (@typeInfo(T) == .Pointer) {
+        var buf: [16]u8 = undefined;
+        const txt = value_as_str(T, value, &buf) catch "error as_str";
+        std.debug.print("  free_value, pointer type value, {s}\n", .{txt});
+        // Free the allocated memory for pointer type.
+        allocator.free(value);
+    } else {
+        std.debug.print("  free_value, primitive type value, no need to free, {}\n", .{value});
+    }
+}
+
+fn eql_value(comptime T: type, a: T, b: T) bool {
     if (@typeInfo(T) == .Pointer) {
         return std.mem.eql(@typeInfo(T).Pointer.child, a, b);
     } else {
         return a == b;
     }
+}
+
+fn value_as_str(comptime T: type, value: T, buf: []u8) ![]u8 {
+    if (@typeInfo(T) == .Pointer) {
+        return try std.fmt.bufPrint(buf, "\"{s}\"", .{value});
+    } else {
+        return try std.fmt.bufPrint(buf, "{any}", .{value});
+    }
+}
+
+fn ItemHashCtx(comptime T: type) type {
+    return struct {
+        pub fn hash(_: @This(), key: T) u64 {
+            var hashed: u64 = undefined;
+            if (@typeInfo(T) == .Pointer) {
+                var h = std.hash.Wyhash.init(0);
+                h.update(key);
+                hashed = h.final();
+            } else {
+                const num: u64 = @intCast(key);
+                const bytes = @as([*]const u8, @ptrCast(&num))[0..@sizeOf(u64)];
+                hashed = std.hash.Wyhash.hash(0, bytes);
+            }
+            return hashed;
+        }
+
+        pub fn eql(_: @This(), a: T, b: T) bool {
+            return eql_value(T, a, b);
+        }
+    };
 }
 
