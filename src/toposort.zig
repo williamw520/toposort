@@ -16,6 +16,7 @@ pub fn TopoSort(comptime T: type) type {
         item_map:       ItemMap,                    // map item (as key) to item id.
         dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
         incomings:      []u32,                      // counts of incoming leading links of each item.
+        visited:        []bool,                     // track whether an item has been processed.
 
         pub fn init(allocator: Allocator) !*Self {
             const obj_ptr = try allocator.create(Self);
@@ -26,6 +27,7 @@ pub fn TopoSort(comptime T: type) type {
                 .unique_items = ArrayList(T).init(allocator),
                 .dependents = undefined,
                 .incomings = undefined,
+                .visited = undefined,
             };
             return obj_ptr;
         }
@@ -67,15 +69,27 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         pub fn process(self: *Self) !void {
+            try self.setup();
+
+        }
+
+        fn setup(self: *Self) !void {
             for (self.dependencies.items) |dep| {
                 const lead_id   = try self.add_item(dep.leading);
                 const dep_id    = try self.add_item(dep.dependent);
                 std.debug.print("  dep_id({}) : lead_id({})\n", .{dep_id, lead_id});
             }
-            try self.alloc_dependents();
+            try self.alloc_arrays();
             try self.add_dependents();
-            try self.alloc_incomings();
             try self.add_incomings();
+        }
+
+        fn scan_incoming_counts(self: *Self, found: *ArrayList(u32)) !void {
+            for (self.incomings, 0..) |count, id| {
+                if (count == 0) {
+                    try found.append(@intCast(id));
+                }
+            }
         }
 
         fn add_item(self: *Self, ts_item: T) !u32 {
@@ -95,11 +109,18 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn alloc_dependents(self: *Self) !void {
+        fn alloc_arrays(self: *Self) !void {
+            // Allocate the dependents array.
             self.dependents = try self.allocator.alloc(ArrayList(u32), self.item_count());
             for (0..self.dependents.len) |i| {
                 self.dependents[i] = ArrayList(u32).init(self.allocator);
             }
+            // Allocate the incomings array.
+            self.incomings = try self.allocator.alloc(u32, self.item_count());
+            @memset(self.incomings, 0);
+            // Allocate the visited array.
+            self.visited = try self.allocator.alloc(bool, self.item_count());
+            @memset(self.visited, false);
         }
 
         fn add_dependents(self: *Self) !void {
@@ -121,11 +142,6 @@ pub fn TopoSort(comptime T: type) type {
             if (found == null) {
                 try list_ptr.append(dep_id);
             }
-        }
-
-        fn alloc_incomings(self: *Self) !void {
-            self.incomings = try self.allocator.alloc(u32, self.item_count());
-            @memset(self.incomings, 0);
         }
 
         fn add_incomings(self: *Self) !void {
