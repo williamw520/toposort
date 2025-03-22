@@ -22,7 +22,7 @@ pub fn TopoSort(comptime T: type) type {
                 .allocator = allocator,
                 .dependencies = ArrayList(Dependency(T)).init(allocator),
                 .unique_items = ArrayList(T).init(allocator),
-                .dependents = undefined,
+                .dependents = try allocator.alloc(ArrayList(u32), 0),
                 .ordered_sets = ArrayList(ArrayList(u32)).init(allocator),
             };
             return obj_ptr;
@@ -34,24 +34,42 @@ pub fn TopoSort(comptime T: type) type {
             }
             self.dependencies.deinit();
 
-            for (self.unique_items.items) |item| {
-                free_value(T, item, self.allocator);
-            }
-            self.unique_items.deinit();
-
-            for (self.dependents) |dep_list| {
-                dep_list.deinit();
-            }
-            self.allocator.free(self.dependents);
-
-            for (self.ordered_sets.items) |list| {
-                list.deinit();
-            }
-            self.ordered_sets.deinit();
+            self.free_unique_items();
+            self.free_dependents();
+            self.free_ordered_sets();
 
             // TODO: do it right.
             self.allocator.destroy(self);
         }
+
+        fn free_unique_items(self: *Self) void {
+            for (self.unique_items.items) |item| {
+                free_value(T, item, self.allocator);
+            }
+            self.unique_items.deinit();
+        }
+
+        fn free_dependents(self: *Self) void {
+            for (self.dependents) |item_list| {
+                item_list.deinit();
+            }
+            self.allocator.free(self.dependents);
+        }
+
+        fn realloc_dependents(self: *Self) !void {
+            self.free_dependents();
+            self.dependents = try self.allocator.alloc(ArrayList(u32), self.item_count());
+            for (0..self.dependents.len) |i| {
+                self.dependents[i] = ArrayList(u32).init(self.allocator);
+            }
+        }
+
+        fn free_ordered_sets(self: *Self) void {
+            for (self.ordered_sets.items) |list| {
+                list.deinit();
+            }
+            self.ordered_sets.deinit();
+        }            
 
         fn item_count(self: *Self) usize {
             return self.unique_items.items.len;
@@ -131,12 +149,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn add_dependents(self: *Self, item_map: ItemMap) !void {
-            // Allocate the dependents array.
-            self.dependents = try self.allocator.alloc(ArrayList(u32), self.item_count());
-            for (0..self.dependents.len) |i| {
-                self.dependents[i] = ArrayList(u32).init(self.allocator);
-            }
-
+            try self.realloc_dependents();  // re-alloc dependents based on the current item count.
             for (self.dependencies.items) |dep| {
                 const lead_id   = item_map.get(dep.leading);
                 const dep_id    = item_map.get(dep.dependent);
