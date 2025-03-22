@@ -7,34 +7,43 @@ const ArgIterator = std.process.ArgIterator;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const g_allocator = gpa.allocator();
 // const g_allocator = std.heap.page_allocator;
+// const g_allocator = std.testing.allocator;
 
 const TopoSort = toposort.TopoSort;
 
 
 pub fn main() !void {
     std.debug.print("\n", .{});
-    var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = bw.writer();
 
-    var args = try CmdArgs.parse(g_allocator);
-    defer args.deinit();
-    try stdout.print("data_file: {s}, out_file: {s}, is_int: {}, is_parallel: {}\n", .{ args.data_file, args.out_file, args.is_int, args.is_parallel });
+    {
+        // var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
+        // const stdout = bw.writer();
 
-    if (args.is_int) {
-        const T = u32;
-        const tsort = try TopoSort(T).init(g_allocator);
-        defer tsort.deinit();
-        try readData(T, args.data_file, tsort);
-        try tsort.process();
-    } else {
-        const T = []const u8;
-        const tsort = try TopoSort(T).init(g_allocator);
-        defer tsort.deinit();
-        try readData(T, args.data_file, tsort);
-        try tsort.process();
+        var args = try CmdArgs.parse(g_allocator);
+        defer args.deinit();
+        std.debug.print("data_file: {s}, out_file: {s}, is_int: {}, is_parallel: {}\n", .{ args.data_file, args.out_file, args.is_int, args.is_parallel });
+
+        if (args.is_int) {
+            const T = u32;
+            const tsort = try TopoSort(T).init(g_allocator);
+            defer tsort.deinit();
+            try readData(T, args.data_file, tsort);
+            try tsort.process();
+        } else {
+            const T = []const u8;
+            const tsort = try TopoSort(T).init(g_allocator);
+            defer tsort.deinit();
+            try readData(T, args.data_file, tsort);
+            try tsort.process();
+        }
+        // try bw.flush();
     }
 
-    try bw.flush();
+    if (gpa.detectLeaks()) {
+        std.debug.print("🚨 Memory leak detected!\n", .{});
+    } else {
+        std.debug.print("✅ No memory leaks!\n", .{});
+    }    
 }
 
 const CmdArgs = struct {

@@ -17,6 +17,7 @@ pub fn TopoSort(comptime T: type) type {
         dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
         incomings:      []u32,                      // counts of incoming leading links of each item.
         visited:        []bool,                     // track whether an item has been processed.
+        ordered_sets:   ArrayList(ArrayList(u32)),
 
         pub fn init(allocator: Allocator) !*Self {
             const obj_ptr = try allocator.create(Self);
@@ -28,6 +29,7 @@ pub fn TopoSort(comptime T: type) type {
                 .dependents = undefined,
                 .incomings = undefined,
                 .visited = undefined,
+                .ordered_sets = ArrayList(ArrayList(u32)).init(allocator),
             };
             return obj_ptr;
         }
@@ -39,10 +41,7 @@ pub fn TopoSort(comptime T: type) type {
             self.dependencies.deinit();
             self.item_map.deinit();
 
-            for (self.unique_items.items, 0..) |item, index| {
-                var buf: [16]u8 = undefined;
-                const txt = value_as_str(T, item, &buf) catch "error as_str";
-                std.debug.print("  free item: {s}, index: {}\n", .{txt, index});
+            for (self.unique_items.items) |item| {
                 free_value(T, item, self.allocator);
             }
             self.unique_items.deinit();
@@ -52,6 +51,15 @@ pub fn TopoSort(comptime T: type) type {
             }
             self.allocator.free(self.dependents);
             self.allocator.free(self.incomings);
+            self.allocator.free(self.visited);
+
+            for (self.ordered_sets.items) |list| {
+                list.deinit();
+            }
+            self.ordered_sets.deinit();
+
+            // TODO: do it right.
+            self.allocator.destroy(self);
         }
 
         fn item_count(self: *Self) usize {
@@ -71,13 +79,50 @@ pub fn TopoSort(comptime T: type) type {
         pub fn process(self: *Self) !void {
             try self.setup();
 
+            var curr_found = ArrayList(u32).init(self.allocator);
+            try self.scan_incoming_counts(&curr_found);
+
+            while (curr_found.items.len > 0) {
+                var next_found = ArrayList(u32).init(self.allocator);
+                try self.ordered_sets.append(curr_found);
+                for (curr_found.items) |found_id| {
+                    self.visited[found_id] = true;
+                    const deps_of_found = &self.dependents[found_id];
+                    for (deps_of_found.items) |dep_id| {
+                        if (self.visited[dep_id] == false) {
+                            self.incomings[dep_id] -= 1;
+                            if (self.incomings[dep_id] == 0) {
+                                try next_found.append(dep_id);
+                            }
+                        }
+                    }
+                }
+                curr_found = next_found;
+            }
+            curr_found.deinit();
+
+            std.debug.print("  ordered [", .{});
+            for (self.ordered_sets.items) |sublist| {
+                std.debug.print(" {{ ", .{});
+                for(sublist.items) |id| {
+                    var buf: [16]u8 = undefined;
+                    const txt = value_as_str(T, self.unique_items.items[id], &buf) catch "error as_str";
+                    std.debug.print("{}:{s} ", .{id, txt});
+                }
+                std.debug.print("}} ", .{});
+            }
+            std.debug.print(" ]\n", .{});
         }
 
         fn setup(self: *Self) !void {
             for (self.dependencies.items) |dep| {
-                const lead_id   = try self.add_item(dep.leading);
                 const dep_id    = try self.add_item(dep.dependent);
-                std.debug.print("  dep_id({}) : lead_id({})\n", .{dep_id, lead_id});
+                const lead_id   = try self.add_item(dep.leading);
+                var buf1: [16]u8 = undefined;
+                var buf2: [16]u8 = undefined;
+                const txt1 = value_as_str(T, dep.dependent, &buf1) catch "error as_str";
+                const txt2 = value_as_str(T, dep.leading, &buf2) catch "error as_str";
+                std.debug.print("  dep_id({}:{s}) : lead_id({}:{s})\n", .{dep_id, txt1, lead_id, txt2});
             }
             try self.alloc_arrays();
             try self.add_dependents();
