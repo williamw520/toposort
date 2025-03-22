@@ -16,9 +16,6 @@ pub fn main() !void {
     std.debug.print("\n", .{});
 
     {
-        // var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
-        // const stdout = bw.writer();
-
         var args = try CmdArgs.parse(g_allocator);
         defer args.deinit();
         std.debug.print("data_file: {s}, out_file: {s}, is_int: {}, is_parallel: {}\n", .{ args.data_file, args.out_file, args.is_int, args.is_parallel });
@@ -36,13 +33,12 @@ pub fn main() !void {
             try readData(T, args.data_file, tsort);
             try tsort.process();
         }
-        // try bw.flush();
     }
 
     if (gpa.detectLeaks()) {
-        std.debug.print("🚨 Memory leak detected!\n", .{});
+        std.debug.print("Memory leak detected!\n", .{});
     } else {
-        std.debug.print("✅ No memory leaks!\n", .{});
+        std.debug.print("No memory leaks!\n", .{});
     }    
 }
 

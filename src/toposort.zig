@@ -12,11 +12,8 @@ pub fn TopoSort(comptime T: type) type {
         const Self = @This();
         allocator:      Allocator,
         dependencies:   ArrayList(Dependency(T)),   // the list of dependency pairs.
-        unique_items:   ArrayList(T),               // the list of unique items.
-        item_map:       ItemMap,                    // map item (as key) to item id.
+        unique_items:   ArrayList(T),               // the item list.
         dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
-        incomings:      []u32,                      // counts of incoming leading links of each item.
-        visited:        []bool,                     // track whether an item has been processed.
         ordered_sets:   ArrayList(ArrayList(u32)),
 
         pub fn init(allocator: Allocator) !*Self {
@@ -24,11 +21,8 @@ pub fn TopoSort(comptime T: type) type {
             obj_ptr.* = Self {
                 .allocator = allocator,
                 .dependencies = ArrayList(Dependency(T)).init(allocator),
-                .item_map = ItemMap.init(allocator),
                 .unique_items = ArrayList(T).init(allocator),
                 .dependents = undefined,
-                .incomings = undefined,
-                .visited = undefined,
                 .ordered_sets = ArrayList(ArrayList(u32)).init(allocator),
             };
             return obj_ptr;
@@ -39,7 +33,6 @@ pub fn TopoSort(comptime T: type) type {
                 dep.deinit(self.allocator);
             }
             self.dependencies.deinit();
-            self.item_map.deinit();
 
             for (self.unique_items.items) |item| {
                 free_value(T, item, self.allocator);
@@ -50,8 +43,6 @@ pub fn TopoSort(comptime T: type) type {
                 dep_list.deinit();
             }
             self.allocator.free(self.dependents);
-            self.allocator.free(self.incomings);
-            self.allocator.free(self.visited);
 
             for (self.ordered_sets.items) |list| {
                 list.deinit();
@@ -67,118 +58,90 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         pub fn add_dependency(self: *Self, leading: T, dependent: T) !void {
-            var buf1: [16]u8 = undefined;
-            var buf2: [16]u8 = undefined;
-            const leading_txt   = try value_as_str(T, leading, &buf1);
-            const dependent_txt = try value_as_str(T, dependent, &buf2);
-            std.debug.print("add(), leading: {s} => dependent: {s}\n", .{leading_txt, dependent_txt});
             const dep = try Dependency(T).init(self.allocator, leading, dependent);
             try self.dependencies.append(dep);
         }
 
         pub fn process(self: *Self) !void {
-            try self.setup();
+            var item_map: ItemMap = ItemMap.init(self.allocator);
+            defer item_map.deinit();
+            try self.add_items(&item_map);
+            try self.add_dependents(item_map);
+            try self.resolve();
+            self.dump_dependents();
+            self.dump_resolved();
+        }
 
-            var curr_found = ArrayList(u32).init(self.allocator);
-            try self.scan_incoming_counts(&curr_found);
+        fn resolve(self: *Self) !void {
+            // counts of incoming leading links of each item.
+            var incomings: []u32 = try self.allocator.alloc(u32, self.item_count());
+            defer self.allocator.free(incomings);
+            try self.add_incomings(incomings);
+            
+            // track whether an item has been processed.
+            var visited: []bool = try self.allocator.alloc(bool, self.item_count());
+            defer self.allocator.free(visited);
+            @memset(visited, false);
 
-            while (curr_found.items.len > 0) {
-                var next_found = ArrayList(u32).init(self.allocator);
-                try self.ordered_sets.append(curr_found);
-                for (curr_found.items) |found_id| {
-                    self.visited[found_id] = true;
-                    const deps_of_found = &self.dependents[found_id];
-                    for (deps_of_found.items) |dep_id| {
-                        if (self.visited[dep_id] == false) {
-                            self.incomings[dep_id] -= 1;
-                            if (self.incomings[dep_id] == 0) {
-                                try next_found.append(dep_id);
-                            }
+            var curr_zeros = ArrayList(u32).init(self.allocator);
+            defer curr_zeros.deinit();                      // free the last version of the list.
+
+            try find_zero_incoming(incomings, &curr_zeros); // find the initial set.
+            while (curr_zeros.items.len > 0) {
+                try self.ordered_sets.append(curr_zeros);   // save the items depending on none.
+
+                var next_zeros = ArrayList(u32).init(self.allocator);
+                for (curr_zeros.items) |zero_id| {
+                    visited[zero_id] = true;
+                    const dependents_of_zero = &self.dependents[zero_id];
+                    for (dependents_of_zero.items) |dep_id| {
+                        if (visited[dep_id]) continue;
+                        incomings[dep_id] -= 1;
+                        if (incomings[dep_id] == 0) {
+                            try next_zeros.append(dep_id);
                         }
                     }
                 }
-                curr_found = next_found;
+                curr_zeros = next_zeros;
             }
-            curr_found.deinit();
-
-            std.debug.print("  ordered [", .{});
-            for (self.ordered_sets.items) |sublist| {
-                std.debug.print(" {{ ", .{});
-                for(sublist.items) |id| {
-                    var buf: [16]u8 = undefined;
-                    const txt = value_as_str(T, self.unique_items.items[id], &buf) catch "error as_str";
-                    std.debug.print("{}:{s} ", .{id, txt});
-                }
-                std.debug.print("}} ", .{});
-            }
-            std.debug.print(" ]\n", .{});
         }
 
-        fn setup(self: *Self) !void {
+        fn add_items(self: *Self, item_map: *ItemMap) !void {
             for (self.dependencies.items) |dep| {
-                const dep_id    = try self.add_item(dep.dependent);
-                const lead_id   = try self.add_item(dep.leading);
+                const depend_id = try self.add_item(dep.dependent, item_map);
+                const lead_id   = try self.add_item(dep.leading, item_map);
                 var buf1: [16]u8 = undefined;
                 var buf2: [16]u8 = undefined;
                 const txt1 = value_as_str(T, dep.dependent, &buf1) catch "error as_str";
                 const txt2 = value_as_str(T, dep.leading, &buf2) catch "error as_str";
-                std.debug.print("  dep_id({}:{s}) : lead_id({}:{s})\n", .{dep_id, txt1, lead_id, txt2});
-            }
-            try self.alloc_arrays();
-            try self.add_dependents();
-            try self.add_incomings();
-        }
-
-        fn scan_incoming_counts(self: *Self, found: *ArrayList(u32)) !void {
-            for (self.incomings, 0..) |count, id| {
-                if (count == 0) {
-                    try found.append(@intCast(id));
-                }
+                std.debug.print("  depend_id({}:{s}) : lead_id({}:{s})\n", .{depend_id, txt1, lead_id, txt2});
             }
         }
-
-        fn add_item(self: *Self, ts_item: T) !u32 {
-            var buf: [16]u8 = undefined;
-            const item_txt = value_as_str(T, ts_item, &buf) catch "error as_str";
-
-            if (self.item_map.get(ts_item)) |item_id| {
-                std.debug.print("  found {s} at id: {any}.\n", .{item_txt, item_id});
+        
+        fn add_item(self: *Self, ts_item: T, item_map: *ItemMap) !u32 {
+            if (item_map.get(ts_item)) |item_id| {
                 return item_id;
             } else {
-                const dup_item = try dupe_value(T, ts_item, self.allocator);
+                const new_id: u32 = @intCast(self.item_count());
+                const dup_item: T = try dupe_value(T, ts_item, self.allocator);
                 try self.unique_items.append(dup_item);
-                const new_id: u32 = @intCast(self.item_count() - 1);
-                try self.item_map.put(ts_item, new_id);
-                std.debug.print("  added item: {s} at id: {}\n", .{item_txt, new_id});
+                try item_map.put(ts_item, new_id);
                 return new_id;
             }
         }
 
-        fn alloc_arrays(self: *Self) !void {
+        fn add_dependents(self: *Self, item_map: ItemMap) !void {
             // Allocate the dependents array.
             self.dependents = try self.allocator.alloc(ArrayList(u32), self.item_count());
             for (0..self.dependents.len) |i| {
                 self.dependents[i] = ArrayList(u32).init(self.allocator);
             }
-            // Allocate the incomings array.
-            self.incomings = try self.allocator.alloc(u32, self.item_count());
-            @memset(self.incomings, 0);
-            // Allocate the visited array.
-            self.visited = try self.allocator.alloc(bool, self.item_count());
-            @memset(self.visited, false);
-        }
 
-        fn add_dependents(self: *Self) !void {
             for (self.dependencies.items) |dep| {
-                const lead_id   = self.item_map.get(dep.leading);
-                const dep_id    = self.item_map.get(dep.dependent);
+                const lead_id   = item_map.get(dep.leading);
+                const dep_id    = item_map.get(dep.dependent);
                 try self.add_dependent(lead_id.?, dep_id.?);
             }
-            std.debug.print("  dependents: [", .{});
-            for (self.dependents) |list| {
-                std.debug.print(" {any} ", .{list.items});
-            }
-            std.debug.print(" ]\n", .{});
         }
 
         fn add_dependent(self: *Self, lead_id: u32, dep_id: u32) !void {
@@ -189,15 +152,44 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn add_incomings(self: *Self) !void {
+        fn add_incomings(self: *Self, incomings: []u32) !void {
+            @memset(incomings, 0);
             for (self.dependents) |list| {  // each item leads a list of dependents.
                 for (list.items) |dep_id| { // all dep_id have one incoming from the leading item.
-                    self.incomings[dep_id] += 1;    
+                    incomings[dep_id] += 1;    
                 }
             }
-            std.debug.print("  incomings:  {any}\n", .{self.incomings});
         }
 
+        fn find_zero_incoming(incomings: []u32, found: *ArrayList(u32)) !void {
+            for (incomings, 0..) |count, id| {
+                if (count == 0) {
+                    try found.append(@intCast(id));
+                }
+            }
+        }
+
+        fn dump_dependents(self: *Self) void {
+            std.debug.print("  dependents: [", .{});
+            for (self.dependents) |list| {
+                std.debug.print(" {any} ", .{list.items});
+            }
+            std.debug.print(" ]\n", .{});
+        }
+
+        pub fn dump_resolved(self: *Self) void {
+            std.debug.print("  topological sorted [", .{});
+            for (self.ordered_sets.items) |sublist| {
+                std.debug.print(" {{ ", .{});
+                for(sublist.items) |id| {
+                    var buf: [16]u8 = undefined;
+                    const txt = value_as_str(T, self.unique_items.items[id], &buf) catch "error as_str";
+                    std.debug.print("{}:{s} ", .{id, txt});
+                }
+                std.debug.print("}} ", .{});
+            }
+            std.debug.print(" ]\n", .{});
+        }        
     };
 
 }
@@ -210,7 +202,7 @@ fn Dependency(comptime T: type) type {
         leading:    T,
         dependent:  T,
 
-        // Create an object with cloned values, whose memory allocated with the allocator.
+        // create an object with cloned values, whose memory allocated with the allocator.
         fn init(allocator: Allocator, leading: T, dependent: T) !Self {
             return Self {
                 .leading = try dupe_value(T, leading, allocator),
@@ -218,6 +210,7 @@ fn Dependency(comptime T: type) type {
             };
         }
 
+        // free the cloned values with the allocator used in init().
         fn deinit(self: *Self, allocator: Allocator) void {
             free_value(T, self.leading, allocator);
             free_value(T, self.dependent, allocator);
@@ -240,13 +233,7 @@ fn dupe_value(comptime T: type, value: T, allocator: std.mem.Allocator) !T {
 /// Free a value of type T whose memory was allocated before.
 fn free_value(comptime T: type, value: T, allocator: std.mem.Allocator) void {
     if (@typeInfo(T) == .Pointer) {
-        var buf: [16]u8 = undefined;
-        const txt = value_as_str(T, value, &buf) catch "error as_str";
-        std.debug.print("  free_value, pointer type value, {s}\n", .{txt});
-        // Free the allocated memory for pointer type.
-        allocator.free(value);
-    } else {
-        std.debug.print("  free_value, primitive type value, no need to free, {}\n", .{value});
+        allocator.free(value);  // free the allocated memory for pointer type.
     }
 }
 
