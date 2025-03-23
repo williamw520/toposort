@@ -31,14 +31,14 @@ pub fn TopoSort(comptime T: type) type {
             const lead_id   = try self.add_item(leading);
             const dep       = Dependency { .lead_id = lead_id, .dep_id = dep_id };
             try self.data.dependencies.append(dep);
-            self.dump_dependency(leading, dependent);
+            try self.dump_dependency(leading, dependent);
         }
 
         pub fn process(self: *Self) !void {
             try self.setup_dependents();
             try self.resolve();
             self.dump_dependents();
-            self.dump_resolved();
+            try self.dump_resolved();
         }
 
         fn resolve(self: *Self) !void {
@@ -46,7 +46,7 @@ pub fn TopoSort(comptime T: type) type {
             var incomings: []u32 = try self.allocator.alloc(u32, self.data.item_count());
             defer self.allocator.free(incomings);
             try self.setup_incomings(incomings);
-            
+
             // track whether an item has been processed.
             var visited: []bool = try self.allocator.alloc(bool, self.data.item_count());
             defer self.allocator.free(visited);
@@ -73,6 +73,16 @@ pub fn TopoSort(comptime T: type) type {
                 }
                 curr_zeros = next_zeros;
             }
+
+            for (visited, 0..) |flag, id| {
+                if (!flag) {
+                    try self.data.cycle.append(@intCast(id));
+                }
+            }
+            
+            try self.dump_incomings(incomings);
+            try self.dump_visited(visited);
+            try self.dump_cycle();
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {
@@ -116,13 +126,17 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn dump_dependency(self: *Self, leading: T, dependent: T) void {
+        fn item_of_id(self: *Self, id: usize) T {
+            return self.data.unique_items.items[id];
+        }
+
+        fn dump_dependency(self: *Self, leading: T, dependent: T) !void {
             const lead_id   = self.data.item_map.get(leading);
             const depend_id = self.data.item_map.get(dependent);
-            var buf1: [16]u8 = undefined;
-            var buf2: [16]u8 = undefined;
-            const txt1 = value_as_str(T, dependent, &buf1) catch "error as_str";
-            const txt2 = value_as_str(T, leading, &buf2) catch "error as_str";
+            const txt1 = try value_as_alloc_str(T, dependent, self.allocator);
+            const txt2 = try value_as_alloc_str(T, leading, self.allocator);
+            defer self.allocator.free(txt1);
+            defer self.allocator.free(txt2);
             std.debug.print("  depend_id({any}:{s}) : lead_id({any}:{s})\n", .{depend_id, txt1, lead_id, txt2});
         }
 
@@ -134,19 +148,50 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print(" ]\n", .{});
         }
 
-        pub fn dump_resolved(self: *Self) void {
+        fn dump_visited(self: *Self, visited: []bool) !void {
+            std.debug.print("  visited: [ ", .{});
+            for (visited, 0..) |flag, id| {
+                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                defer self.allocator.free(txt);
+                std.debug.print("{}:{s} #{}, ", .{id, txt, flag});
+            }
+            std.debug.print("]\n", .{});
+        }
+
+        fn dump_incomings(self: *Self, incomings: []u32) !void {
+            std.debug.print("  incomings: [ ", .{});
+            for (incomings, 0..) |count, id| {
+                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                defer self.allocator.free(txt);
+                std.debug.print("{}:{s} #{}, ", .{id, txt, count});
+            }
+            std.debug.print("]\n", .{});
+        }
+
+        pub fn dump_resolved(self: *Self) !void {
             std.debug.print("  topological sorted [", .{});
             for (self.data.ordered_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
                 for(sublist.items) |id| {
-                    var buf: [16]u8 = undefined;
-                    const txt = value_as_str(T, self.data.unique_items.items[id], &buf) catch "error as_str";
+                    const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                    defer self.allocator.free(txt);
                     std.debug.print("{}:{s} ", .{id, txt});
                 }
                 std.debug.print("}} ", .{});
             }
             std.debug.print(" ]\n", .{});
-        }        
+        }
+
+        fn dump_cycle(self: *Self) !void {
+            std.debug.print("  cycle: [ ", .{});
+            for (self.data.cycle.items) |id| {
+                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                defer self.allocator.free(txt);
+                std.debug.print("{}:{s} ", .{id, txt});
+            }
+            std.debug.print("]\n", .{});
+        }
+        
     };
 
 }
@@ -171,6 +216,7 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
         ordered_sets:   ArrayList(ArrayList(u32)),
+        cycle:          ArrayList(u32),
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
             self.dependencies = ArrayList(Dependency).init(allocator);
@@ -178,10 +224,12 @@ fn Data(comptime T: type) type {
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.ordered_sets = ArrayList(ArrayList(u32)).init(allocator);
+            self.cycle = ArrayList(u32).init(allocator);
             return self;
         }
 
         fn deinit_obj(self: *Self, allocator: Allocator) void {
+            self.cycle.deinit();
             self.free_ordered_sets();
             self.dependencies.deinit();
             self.free_dependents(allocator);
@@ -251,11 +299,12 @@ fn eql_value(comptime T: type, a: T, b: T) bool {
     }
 }
 
-fn value_as_str(comptime T: type, value: T, buf: []u8) ![]u8 {
+// The returned str must be freed with allocator.free().
+fn value_as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
     if (@typeInfo(T) == .Pointer) {
-        return try std.fmt.bufPrint(buf, "\"{s}\"", .{value});
+        return try std.fmt.allocPrint(allocator, "\"{s}\"", .{value});
     } else {
-        return try std.fmt.bufPrint(buf, "{any}", .{value});
+        return try std.fmt.allocPrint(allocator, "{any}", .{value});
     }
 }
 
