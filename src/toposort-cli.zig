@@ -22,15 +22,15 @@ pub fn main() !void {
 
         if (args.is_int) {
             const T = u32;
-            const tsort = try TopoSort(T).init(g_allocator);
+            var tsort = try TopoSort(T).init(g_allocator);
             defer tsort.deinit();
-            try readData(T, args.data_file, tsort);
+            try readData(T, args.data_file, &tsort);
             try tsort.process();
         } else {
             const T = []const u8;
-            const tsort = try TopoSort(T).init(g_allocator);
+            var tsort = try TopoSort(T).init(g_allocator);
             defer tsort.deinit();
-            try readData(T, args.data_file, tsort);
+            try readData(T, args.data_file, &tsort);
             try tsort.process();
         }
     }
