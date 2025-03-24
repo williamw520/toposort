@@ -26,9 +26,9 @@ pub fn TopoSort(comptime T: type) type {
             self.allocator.destroy(self.data);
         }
 
-        pub fn add_dependency(self: *Self, leading: T, dependent: T) !void {
+        pub fn add_dependency(self: *Self, leading: ?T, dependent: T) !void {
             const dep_id    = try self.add_item(dependent);
-            const lead_id   = try self.add_item(leading);
+            const lead_id   = if (leading) |lead| try self.add_item(lead) else null;
             const dep       = Dependency { .lead_id = lead_id, .dep_id = dep_id };
             try self.data.dependencies.append(dep);
             try self.dump_dependency(leading, dependent);
@@ -89,7 +89,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {
-            if (self.data.item_map.get(input_item)) |item_id| {
+            if (self.get_id(input_item)) |item_id| {
                 return item_id;
             } else {
                 const new_id: u32 = @intCast(self.data.item_count());
@@ -101,13 +101,23 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
+        fn get_item(self: *Self, id: usize) T {
+            return self.data.unique_items.items[id];
+        }
+
+        fn get_id(self: *Self, item: T) ?u32 {
+            return self.data.item_map.get(item);
+        }
+
         fn setup_dependents(self: *Self) !void {
             // re-alloc the dependents array based on the current item count.
             try self.data.realloc_dependents(self.allocator);
             for (self.data.dependencies.items) |dep| {
-                var leads_dependents = &self.data.dependents[dep.lead_id];
-                if (null == indexOfScalar(u32, leads_dependents.items, dep.dep_id)) {
-                    try leads_dependents.append(dep.dep_id);
+                if (dep.lead_id) |lead_id| {
+                    var leads_dependents = &self.data.dependents[lead_id];
+                    if (null == indexOfScalar(u32, leads_dependents.items, dep.dep_id)) {
+                        try leads_dependents.append(dep.dep_id);
+                    }
                 }
             }
         }
@@ -132,7 +142,7 @@ pub fn TopoSort(comptime T: type) type {
         fn add_sorted_set(self: *Self, curr_zeros: ArrayList(u32)) !void {
             var sorted_set = ArrayList(T).init(self.allocator);
             for (curr_zeros.items) |id| {
-                try sorted_set.append(self.item_of_id(id));
+                try sorted_set.append(self.get_item(id));
             }
             try self.data.sorted_sets.append(sorted_set);
         }
@@ -145,18 +155,19 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn item_of_id(self: *Self, id: usize) T {
-            return self.data.unique_items.items[id];
-        }
-
-        fn dump_dependency(self: *Self, leading: T, dependent: T) !void {
-            const lead_id   = self.data.item_map.get(leading);
-            const depend_id = self.data.item_map.get(dependent);
-            const txt1 = try value_as_alloc_str(T, dependent, self.allocator);
-            const txt2 = try value_as_alloc_str(T, leading, self.allocator);
-            defer self.allocator.free(txt1);
-            defer self.allocator.free(txt2);
-            std.debug.print("  depend_id({any}:{s}) : lead_id({any}:{s})\n", .{depend_id, txt1, lead_id, txt2});
+        fn dump_dependency(self: *Self, leading: ?T, dependent: T) !void {
+            const depend_id     = self.get_id(dependent);
+            const depend_txt    = try value_as_alloc_str(T, dependent, self.allocator);
+            defer self.allocator.free(depend_txt);
+            if (leading) |leading_data| {
+                const lead_id   = self.get_id(leading_data);
+                const lead_txt  = try value_as_alloc_str(T, leading_data, self.allocator);
+                defer self.allocator.free(lead_txt);
+                std.debug.print("  depend_id({any}:{s}) : lead_id({any}:{s})\n",
+                                .{depend_id, depend_txt, lead_id, lead_txt});
+            } else {
+                std.debug.print("  depend_id({any}:{s}) : \n", .{depend_id, depend_txt});
+            }
         }
 
         fn dump_dependents(self: *Self) void {
@@ -170,7 +181,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_visited(self: *Self, visited: []bool) !void {
             std.debug.print("  visited: [ ", .{});
             for (visited, 0..) |flag, id| {
-                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} #{}, ", .{id, txt, flag});
             }
@@ -180,7 +191,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_incomings(self: *Self, incomings: []u32) !void {
             std.debug.print("  incomings: [ ", .{});
             for (incomings, 0..) |count, id| {
-                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} #{}, ", .{id, txt, count});
             }
@@ -192,9 +203,9 @@ pub fn TopoSort(comptime T: type) type {
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
                 for(sublist.items) |item| {
-                    const txt = try value_as_alloc_str(T, item, self.allocator);
-                    defer self.allocator.free(txt);
-                    if (self.data.item_map.get(item)) |id| {
+                    if (self.get_id(item)) |id| {
+                        const txt = try value_as_alloc_str(T, item, self.allocator);
+                        defer self.allocator.free(txt);
                         std.debug.print("{}:{s} ", .{id, txt});
                     }
                 }
@@ -206,7 +217,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_cycle(self: *Self) !void {
             std.debug.print("  cycle: [ ", .{});
             for (self.data.cycle.items) |id| {
-                const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} ", .{id, txt});
             }
@@ -220,8 +231,8 @@ pub fn TopoSort(comptime T: type) type {
 
 // Define a dependency between a leading item and a depending item.
 const Dependency = struct {
-    lead_id:    u32,
-    dep_id:     u32,
+    lead_id:    ?u32,   // optional for depending item with no dependency.
+    dep_id:     u32,    // the depending item
 };
 
 

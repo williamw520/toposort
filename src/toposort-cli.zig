@@ -28,6 +28,15 @@ pub fn main() !void {
             try readData(T, args.data_file, &tsort);
             const success = try tsort.process();
             std.debug.print("Processing status: {s}\n", .{ if (success) "success" else "error" });
+
+            const result: ArrayList(ArrayList(T)) = tsort.get_sorted_sets();
+            std.debug.print("  topological sorted [", .{});
+            for (result.items) |list| {
+                std.debug.print(" {{ ", .{});
+                for (list.items) |item| std.debug.print("{} ", .{item});
+                std.debug.print("}} ", .{});
+            }
+            std.debug.print(" ]\n", .{});
         } else {
             const T = []const u8;
             var tsort = try TopoSort(T).init(g_allocator);
@@ -108,39 +117,37 @@ fn readData(comptime T: type, data_file: []const u8, tsort: *TopoSort(T)) !void 
 
     while (reader.streamUntilDelimiter(writer, '\n', null)) {
         defer line_buf.clearRetainingCapacity();
-        const dependent, const required = parseLine(line_buf.items);
-        if (T == u32) {
-            const dep_num = try std.fmt.parseInt(u32, dependent, 10);
-            const req_num = try std.fmt.parseInt(u32, required, 10);
-            try tsort.add_dependency(req_num, dep_num);
-        } else {
-            try tsort.add_dependency(required, dependent);
-        }
+        try parseLine(line_buf.items, T, tsort);
     } else |err| switch (err) {
         error.EndOfStream => { // end of file
             if (line_buf.items.len > 0) {
-                const dependent, const required = parseLine(line_buf.items);
-                if (T == u32) {
-                    const dep_num = try std.fmt.parseInt(u32, dependent, 10);
-                    const req_num = try std.fmt.parseInt(u32, required, 10);
-                    try tsort.add_dependency(req_num, dep_num);
-                } else {
-                    try tsort.add_dependency(required, dependent);
-                }
+                try parseLine(line_buf.items, T, tsort);
             }
         },
         else => return err, // Propagate error
     }
 }
 
-fn parseLine(line: []const u8) struct { []const u8, []const u8 } {
-    var tokens = std.mem.tokenizeScalar(u8, line, ':');
-    const term1 = tokens.next() orelse "";      // depending item
-    const term2 = tokens.next() orelse "";      // required/leading item
-    const first = std.mem.trim(u8, term1, " \t\r\n");
-    const second = std.mem.trim(u8, term2, " \t\r\n");
-    
-    return .{ first, second };
+fn parseLine(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
+    var tokens      = std.mem.tokenizeScalar(u8, line, ':');
+    const first     = tokens.next() orelse "";  // depending item
+    const dependent = std.mem.trim(u8, first, " \t\r\n");
+    if (dependent.len == 0)
+        return;
+    const dep_num   = if (T == u32) try std.fmt.parseInt(u32, dependent, 10);
+
+    const rest      = tokens.next() orelse "";  // leading/required items
+    var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
+    while (rest_tokens.next()) |token| {
+        const lead  = std.mem.trim(u8, token, " \t\r\n");
+        if (T == u32) {
+            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(u32, lead, 10);
+            try tsort.add_dependency(lead_num, dep_num);
+        } else {
+            const lead_txt: ?T = if (lead.len == 0) null else lead;
+            try tsort.add_dependency(lead_txt, dependent);
+        }
+    }
 }
 
 inline fn print(comptime format: []const u8, args: anytype) void {
