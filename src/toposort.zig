@@ -34,11 +34,21 @@ pub fn TopoSort(comptime T: type) type {
             try self.dump_dependency(leading, dependent);
         }
 
-        pub fn process(self: *Self) !void {
+        pub fn process(self: *Self) !bool {
             try self.setup_dependents();
-            try self.resolve();
             self.dump_dependents();
+            try self.resolve();
             try self.dump_resolved();
+            try self.dump_cycle();
+            return !self.has_cycle();
+        }
+
+        pub fn has_cycle(self: *Self) bool {
+            return self.data.cycle.items.len > 0;
+        }
+
+        pub fn get_sorted_sets(self: *Self) ArrayList(ArrayList(T)) {
+            return self.data.sorted_sets;
         }
 
         fn resolve(self: *Self) !void {
@@ -52,37 +62,30 @@ pub fn TopoSort(comptime T: type) type {
             defer self.allocator.free(visited);
             @memset(visited, false);
 
+            // items that have no incoming leading links, i.e. they have no dependency.
             var curr_zeros = ArrayList(u32).init(self.allocator);
-            defer curr_zeros.deinit();  // free the last version, not necessary the first version.
+            var next_zeros = ArrayList(u32).init(self.allocator);
+            defer curr_zeros.deinit();
+            defer next_zeros.deinit();
 
-            try find_zero_incoming(incomings, &curr_zeros);     // find the initial set.
+            try find_zero_incoming(incomings, &curr_zeros); // find the initial set.
             while (curr_zeros.items.len > 0) {
-                try self.data.ordered_sets.append(curr_zeros);  // save items depending on none.
-
-                var next_zeros = ArrayList(u32).init(self.allocator);
+                try self.add_sorted_set(curr_zeros);        // emit items that depend on none.
+                next_zeros.clearRetainingCapacity();        // reset array for the next round.
                 for (curr_zeros.items) |zero_id| {
                     visited[zero_id] = true;
-                    const dependents_of_zero = &self.data.dependents[zero_id];
-                    for (dependents_of_zero.items) |dep_id| {
+                    for (self.data.dependents[zero_id].items) |dep_id| {
                         if (visited[dep_id]) continue;
                         incomings[dep_id] -= 1;
-                        if (incomings[dep_id] == 0) {
-                            try next_zeros.append(dep_id);
-                        }
+                        if (incomings[dep_id] == 0) try next_zeros.append(dep_id);
                     }
                 }
-                curr_zeros = next_zeros;
+                std.mem.swap(ArrayList(u32), &curr_zeros, &next_zeros);
             }
+            try self.collect_cycled_items(visited);
 
-            for (visited, 0..) |flag, id| {
-                if (!flag) {
-                    try self.data.cycle.append(@intCast(id));
-                }
-            }
-            
             try self.dump_incomings(incomings);
             try self.dump_visited(visited);
-            try self.dump_cycle();
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {
@@ -122,6 +125,22 @@ pub fn TopoSort(comptime T: type) type {
             for (incomings, 0..) |count, id| {
                 if (count == 0) {
                     try found.append(@intCast(id));
+                }
+            }
+        }
+
+        fn add_sorted_set(self: *Self, curr_zeros: ArrayList(u32)) !void {
+            var sorted_set = ArrayList(T).init(self.allocator);
+            for (curr_zeros.items) |id| {
+                try sorted_set.append(self.item_of_id(id));
+            }
+            try self.data.sorted_sets.append(sorted_set);
+        }
+
+        fn collect_cycled_items(self: *Self, visited: []bool) !void {
+            for (visited, 0..) |flag, id| {
+                if (!flag) {
+                    try self.data.cycle.append(@intCast(id));
                 }
             }
         }
@@ -169,13 +188,15 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         pub fn dump_resolved(self: *Self) !void {
-            std.debug.print("  topological sorted [", .{});
-            for (self.data.ordered_sets.items) |sublist| {
+            std.debug.print("  sorted [", .{});
+            for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
-                for(sublist.items) |id| {
-                    const txt = try value_as_alloc_str(T, self.item_of_id(id), self.allocator);
+                for(sublist.items) |item| {
+                    const txt = try value_as_alloc_str(T, item, self.allocator);
                     defer self.allocator.free(txt);
-                    std.debug.print("{}:{s} ", .{id, txt});
+                    if (self.data.item_map.get(item)) |id| {
+                        std.debug.print("{}:{s} ", .{id, txt});
+                    }
                 }
                 std.debug.print("}} ", .{});
             }
@@ -215,7 +236,7 @@ fn Data(comptime T: type) type {
         item_map:       ItemMap,                    // maps item to id.
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
-        ordered_sets:   ArrayList(ArrayList(u32)),
+        sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
         cycle:          ArrayList(u32),
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
@@ -223,25 +244,25 @@ fn Data(comptime T: type) type {
             self.item_map = ItemMap.init(allocator);
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
-            self.ordered_sets = ArrayList(ArrayList(u32)).init(allocator);
+            self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
             self.cycle = ArrayList(u32).init(allocator);
             return self;
         }
 
         fn deinit_obj(self: *Self, allocator: Allocator) void {
             self.cycle.deinit();
-            self.free_ordered_sets();
+            self.free_sorted_sets();
             self.dependencies.deinit();
             self.free_dependents(allocator);
             self.item_map.deinit();
             self.free_unique_items(allocator);
         }
 
-        fn free_ordered_sets(self: *Self) void {
-            for (self.ordered_sets.items) |list| {
+        fn free_sorted_sets(self: *Self) void {
+            for (self.sorted_sets.items) |list| {
                 list.deinit();
             }
-            self.ordered_sets.deinit();
+            self.sorted_sets.deinit();
         }            
 
         fn free_dependents(self: *Self, allocator: Allocator) void {

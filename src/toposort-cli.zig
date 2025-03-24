@@ -3,6 +3,7 @@ const std = @import("std");
 const toposort = @import("toposort");
 const Allocator = std.mem.Allocator;
 const ArgIterator = std.process.ArgIterator;
+const ArrayList = std.ArrayList;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const g_allocator = gpa.allocator();
@@ -25,13 +26,24 @@ pub fn main() !void {
             var tsort = try TopoSort(T).init(g_allocator);
             defer tsort.deinit();
             try readData(T, args.data_file, &tsort);
-            try tsort.process();
+            const success = try tsort.process();
+            std.debug.print("Processing status: {s}\n", .{ if (success) "success" else "error" });
         } else {
             const T = []const u8;
             var tsort = try TopoSort(T).init(g_allocator);
             defer tsort.deinit();
             try readData(T, args.data_file, &tsort);
-            try tsort.process();
+            const success = try tsort.process();
+            std.debug.print("Processing status: {s}\n", .{ if (success) "success" else "error" });
+
+            const result: ArrayList(ArrayList(T)) = tsort.get_sorted_sets();
+            std.debug.print("  topological sorted [", .{});
+            for (result.items) |list| {
+                std.debug.print(" {{ ", .{});
+                for (list.items) |item| std.debug.print("{s} ", .{item});
+                std.debug.print("}} ", .{});
+            }
+            std.debug.print(" ]\n", .{});
         }
     }
 
