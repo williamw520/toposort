@@ -119,12 +119,12 @@ fn readData(comptime T: type, data_file: []const u8, tsort: *TopoSort(T)) !void 
         defer line_buf.clearRetainingCapacity();
         try parseLine(line_buf.items, T, tsort);
     } else |err| switch (err) {
-        error.EndOfStream => { // end of file
+        error.EndOfStream => {  // end of file
             if (line_buf.items.len > 0) {
                 try parseLine(line_buf.items, T, tsort);
             }
         },
-        else => return err, // Propagate error
+        else => return err,     // Propagate error
     }
 }
 

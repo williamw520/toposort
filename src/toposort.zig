@@ -94,6 +94,7 @@ pub fn TopoSort(comptime T: type) type {
             } else {
                 const new_id: u32 = @intCast(self.data.item_count());
                 const dup_item: T = try dupe_value(T, input_item, self.allocator);
+                // const dup_item: T = input_item;
                 try self.data.unique_items.append(dup_item);
                 // use dup_item (with its own memory) for key as the map stores the key.
                 try self.data.item_map.put(dup_item, new_id);
@@ -157,11 +158,11 @@ pub fn TopoSort(comptime T: type) type {
 
         fn dump_dependency(self: *Self, leading: ?T, dependent: T) !void {
             const depend_id     = self.get_id(dependent);
-            const depend_txt    = try value_as_alloc_str(T, dependent, self.allocator);
+            const depend_txt    = try as_alloc_str(T, dependent, self.allocator);
             defer self.allocator.free(depend_txt);
             if (leading) |leading_data| {
                 const lead_id   = self.get_id(leading_data);
-                const lead_txt  = try value_as_alloc_str(T, leading_data, self.allocator);
+                const lead_txt  = try as_alloc_str(T, leading_data, self.allocator);
                 defer self.allocator.free(lead_txt);
                 std.debug.print("  depend_id({any}:{s}) : lead_id({any}:{s})\n",
                                 .{depend_id, depend_txt, lead_id, lead_txt});
@@ -181,7 +182,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_visited(self: *Self, visited: []bool) !void {
             std.debug.print("  visited: [ ", .{});
             for (visited, 0..) |flag, id| {
-                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
+                const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} #{}, ", .{id, txt, flag});
             }
@@ -191,7 +192,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_incomings(self: *Self, incomings: []u32) !void {
             std.debug.print("  incomings: [ ", .{});
             for (incomings, 0..) |count, id| {
-                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
+                const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} #{}, ", .{id, txt, count});
             }
@@ -204,7 +205,7 @@ pub fn TopoSort(comptime T: type) type {
                 std.debug.print(" {{ ", .{});
                 for(sublist.items) |item| {
                     if (self.get_id(item)) |id| {
-                        const txt = try value_as_alloc_str(T, item, self.allocator);
+                        const txt = try as_alloc_str(T, item, self.allocator);
                         defer self.allocator.free(txt);
                         std.debug.print("{}:{s} ", .{id, txt});
                     }
@@ -217,7 +218,7 @@ pub fn TopoSort(comptime T: type) type {
         fn dump_cycle(self: *Self) !void {
             std.debug.print("  cycle: [ ", .{});
             for (self.data.cycle.items) |id| {
-                const txt = try value_as_alloc_str(T, self.get_item(id), self.allocator);
+                const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{}:{s} ", .{id, txt});
             }
@@ -237,18 +238,25 @@ const Dependency = struct {
 
 
 // Internal struct holding all the dynamically allocated data.
+// Mainly dealing with allocation and deallocation.
 fn Data(comptime T: type) type {
-    const ItemMap = std.HashMap(T, u32, ItemHashCtx(T), std.hash_map.default_max_load_percentage);
+    
+    const ItemMap = std.HashMap(T, u32,
+                                ItemHashCtx(T),
+                                std.hash_map.default_max_load_percentage);
+    // const ItemMap = std.HashMap(T, u32,
+    //                             if (HashCtx) HashCtx.? else ItemHashCtx(T),
+    //                             std.hash_map.default_max_load_percentage);
 
     return struct {
         const Self = @This();
 
-        unique_items:   ArrayList(T),               // the item list.
-        item_map:       ItemMap,                    // maps item to id.
+        unique_items:   ArrayList(T),               // the item list, without duplicates.
+        item_map:       ItemMap,                    // maps item to sequential id.
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
-        dependents:     []ArrayList(u32),           // map each item to its dependent ids. [[2, 3], [], [4]]
+        dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        cycle:          ArrayList(u32),
+        cycle:          ArrayList(u32),             // the item ids forming cycles.
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
             self.dependencies = ArrayList(Dependency).init(allocator);
@@ -304,15 +312,13 @@ fn Data(comptime T: type) type {
     };
 }    
 
-/// Clone a value of type T.  For Pointer type (strings, slices), allocate memory for it.
+/// Shallow-clone a value of type T.  For Pointer type (strings, slices), allocate memory for it.
 /// Need to call free_value() on the duplicated value to free it.
 fn dupe_value(comptime T: type, value: T, allocator: std.mem.Allocator) !T {
     if (@typeInfo(T) == .Pointer) {
-        // Dynamically allocate memory for pointer type (e.g. strings, slices).
         return try allocator.dupe(@typeInfo(T).Pointer.child, value);
     } else {
-        // Primitive values and structs with no heap allocation.
-        return value;
+        return value;   // Primitive values and structs with no heap allocation.
     }
 }
 
@@ -327,12 +333,12 @@ fn eql_value(comptime T: type, a: T, b: T) bool {
     if (@typeInfo(T) == .Pointer) {
         return std.mem.eql(@typeInfo(T).Pointer.child, a, b);
     } else {
-        return a == b;
+        return std.meta.eql(a, b);
     }
 }
 
 // The returned str must be freed with allocator.free().
-fn value_as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
+fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
     if (@typeInfo(T) == .Pointer) {
         return try std.fmt.allocPrint(allocator, "\"{s}\"", .{value});
     } else {
@@ -340,20 +346,21 @@ fn value_as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
     }
 }
 
+// Default hash context for the item type T.
 fn ItemHashCtx(comptime T: type) type {
     return struct {
         pub fn hash(_: @This(), key: T) u64 {
-            var hashed: u64 = undefined;
             if (@typeInfo(T) == .Pointer) {
+                // Note: this handles array of simple types.
                 var h = std.hash.Wyhash.init(0);
                 h.update(key);
-                hashed = h.final();
+                return h.final();
             } else {
-                const num: u64 = @intCast(key);
-                const bytes = @as([*]const u8, @ptrCast(&num))[0..@sizeOf(u64)];
-                hashed = std.hash.Wyhash.hash(0, bytes);
+                // Note: this handles simple types.
+                var h = std.hash.Wyhash.init(0);
+                h.update(std.mem.asBytes(&key));
+                return h.final();
             }
-            return hashed;
         }
 
         pub fn eql(_: @This(), a: T, b: T) bool {
