@@ -40,7 +40,7 @@ pub fn TopoSort(comptime T: type) type {
             try self.setup_dependents();
             self.dump_dependents();
             try self.resolve();
-            try self.dump_resolved();
+            try self.dump_sorted();
             try self.dump_cycle();
             return !self.has_cycle();
         }
@@ -51,6 +51,10 @@ pub fn TopoSort(comptime T: type) type {
 
         pub fn get_sorted_sets(self: *Self) ArrayList(ArrayList(T)) {
             return self.data.sorted_sets;
+        }
+
+        pub fn get_cycle(self: *Self) ArrayList(T) {
+            return self.data.cycle;
         }
 
         fn resolve(self: *Self) !void {
@@ -150,7 +154,7 @@ pub fn TopoSort(comptime T: type) type {
         fn collect_cycled_items(self: *Self, visited: []bool) !void {
             for (visited, 0..) |flag, id| {
                 if (!flag) {
-                    try self.data.cycle.append(@intCast(id));
+                    try self.data.cycle.append(self.get_item(id));
                 }
             }
         }
@@ -198,7 +202,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        pub fn dump_resolved(self: *Self) !void {
+        pub fn dump_sorted(self: *Self) !void {
             std.debug.print("  sorted [", .{});
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
@@ -216,10 +220,11 @@ pub fn TopoSort(comptime T: type) type {
 
         fn dump_cycle(self: *Self) !void {
             std.debug.print("  cycle: [ ", .{});
-            for (self.data.cycle.items) |id| {
-                const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
+            for (self.data.cycle.items) |item| {
+                const id = self.get_id(item);
+                const txt = try as_alloc_str(T, item, self.allocator);
                 defer self.allocator.free(txt);
-                std.debug.print("{}:{s} ", .{id, txt});
+                std.debug.print("{any}:{s} ", .{id, txt});
             }
             std.debug.print("]\n", .{});
         }
@@ -255,7 +260,7 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        cycle:          ArrayList(u32),             // the item ids forming cycles.
+        cycle:          ArrayList(T),               // the item forming cycles.
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
             self.dependencies = ArrayList(Dependency).init(allocator);
@@ -263,7 +268,7 @@ fn Data(comptime T: type) type {
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
-            self.cycle = ArrayList(u32).init(allocator);
+            self.cycle = ArrayList(T).init(allocator);
             return self;
         }
 

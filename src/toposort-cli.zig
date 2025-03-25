@@ -59,6 +59,8 @@ fn process_data(comptime T: type, file_data: []const u8) !void {
         dump_result(T, &tsort);
     } else {
         std.debug.print("Error in processing.\n", .{});
+        dump_result(T, &tsort);
+        dump_cycle(T, &tsort);
     }
 }
 
@@ -77,6 +79,19 @@ fn dump_result(comptime T: type, tsort: *TopoSort(T)) void {
         std.debug.print("}} ", .{});
     }
     std.debug.print(" ]\n", .{});
+}
+
+fn dump_cycle(comptime T: type, tsort: *TopoSort(T)) void {
+    std.debug.print("  cycle: [ ", .{});
+    const cycle: ArrayList(T) = tsort.get_cycle();
+    for (cycle.items) |item| {
+        if (T == usize) {
+            std.debug.print("{} ", .{item});
+        } else {
+            std.debug.print("{s} ", .{item});
+        }
+    }
+    std.debug.print("]\n", .{});
 }
 
 // Process line in the form of "term1 : term2 term3 ..."
