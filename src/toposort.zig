@@ -26,6 +26,8 @@ pub fn TopoSort(comptime T: type) type {
             self.allocator.destroy(self.data);
         }
 
+        // The items are stored by value.  The memory for items are not duplicated.
+        // For slice and pointer type items, memory is managed and retained by the caller.
         pub fn add_dependency(self: *Self, leading: ?T, dependent: T) !void {
             const dep_id    = try self.add_item(dependent);
             const lead_id   = if (leading) |lead| try self.add_item(lead) else null;
@@ -93,11 +95,8 @@ pub fn TopoSort(comptime T: type) type {
                 return item_id;
             } else {
                 const new_id: u32 = @intCast(self.data.item_count());
-                const dup_item: T = try dupe_value(T, input_item, self.allocator);
-                // const dup_item: T = input_item;
-                try self.data.unique_items.append(dup_item);
-                // use dup_item (with its own memory) for key as the map stores the key.
-                try self.data.item_map.put(dup_item, new_id);
+                try self.data.unique_items.append(input_item);
+                try self.data.item_map.put(input_item, new_id);
                 return new_id;
             }
         }
@@ -274,7 +273,7 @@ fn Data(comptime T: type) type {
             self.dependencies.deinit();
             self.free_dependents(allocator);
             self.item_map.deinit();
-            self.free_unique_items(allocator);
+            self.unique_items.deinit();
         }
 
         fn free_sorted_sets(self: *Self) void {
@@ -299,35 +298,11 @@ fn Data(comptime T: type) type {
             }
         }
 
-        fn free_unique_items(self: *Self, allocator: Allocator) void {
-            for (self.unique_items.items) |item| {
-                free_value(T, item, allocator);
-            }
-            self.unique_items.deinit();
-        }
-
         fn item_count(self: *Self) usize {
             return self.unique_items.items.len;
         }
     };
 }    
-
-/// Shallow-clone a value of type T.  For Pointer type (strings, slices), allocate memory for it.
-/// Need to call free_value() on the duplicated value to free it.
-fn dupe_value(comptime T: type, value: T, allocator: std.mem.Allocator) !T {
-    if (@typeInfo(T) == .Pointer) {
-        return try allocator.dupe(@typeInfo(T).Pointer.child, value);
-    } else {
-        return value;   // Primitive values and structs with no heap allocation.
-    }
-}
-
-/// Free a value of type T whose memory was allocated before.
-fn free_value(comptime T: type, value: T, allocator: std.mem.Allocator) void {
-    if (@typeInfo(T) == .Pointer) {
-        allocator.free(value);
-    }
-}
 
 fn eql_value(comptime T: type, a: T, b: T) bool {
     if (@typeInfo(T) == .Pointer) {

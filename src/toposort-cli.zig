@@ -16,7 +16,7 @@ pub fn main() !void {
     std.debug.print("\n", .{});
 
     {
-        var args = try CmdArgs.parse(g_allocator);
+        var args = try CmdArgs.init(g_allocator);
         defer args.deinit();
         std.debug.print("file: {s}, is_int: {}\n", .{ args.data_file, args.is_int });
 
@@ -109,11 +109,7 @@ const CmdArgs = struct {
     data_file:      []const u8,
     is_int:         bool,
 
-    fn deinit(self: *CmdArgs) void {
-        self.arg_itr.deinit();
-    }
-
-    fn parse(allocator: Allocator) !CmdArgs {
+    fn init(allocator: Allocator) !CmdArgs {
         var args = CmdArgs {
             .arg_itr = try std.process.argsWithAllocator(allocator),
             .program = "",
@@ -132,6 +128,11 @@ const CmdArgs = struct {
         }
         return args;
     }
+
+    fn deinit(self: *CmdArgs) void {
+        self.arg_itr.deinit();
+    }
+
 };
 
 
