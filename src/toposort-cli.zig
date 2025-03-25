@@ -53,42 +53,47 @@ fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void
 
     if (try tsort.process()) {
         std.debug.print("Processing succeeded.\n", .{});
-        dump_result(T, &tsort);
+        dump_ordered(T, &tsort);
+        dump_items(T, &tsort);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
+        dump_ordered(T, &tsort);
+        dump_items(T, &tsort);
         dump_cycle(T, &tsort);
-        dump_result(T, &tsort);
     }
 }
 
-fn dump_result(comptime T: type, tsort: *TopoSort(T)) void {
-    std.debug.print("Topologically sorted: [", .{});
+fn dump_ordered(comptime T: type, tsort: *TopoSort(T)) void {
+    std.debug.print("  topologically sorted: [", .{});
     const result: ArrayList(ArrayList(T)) = tsort.get_sorted_sets();
     for (result.items) |set| {
         std.debug.print(" {{ ", .{});
-        for (set.items) |item| {
-            if (T == usize) {
-                std.debug.print("{} ", .{item});
-            } else {
-                std.debug.print("{s} ", .{item});
-            }
-        }
+        for (set.items) |item| dump_item(T, item);
         std.debug.print("}} ", .{});
     }
     std.debug.print(" ]\n", .{});
 }
 
+fn dump_items(comptime T: type, tsort: *TopoSort(T)) void {
+    std.debug.print("  items: [ ", .{});
+    const list: ArrayList(T) = tsort.get_items();
+    for (list.items) |item| dump_item(T, item);
+    std.debug.print("]\n", .{});
+}
+
 fn dump_cycle(comptime T: type, tsort: *TopoSort(T)) void {
     std.debug.print("  cycle: [ ", .{});
     const cycle: ArrayList(T) = tsort.get_cycle();
-    for (cycle.items) |item| {
-        if (T == usize) {
-            std.debug.print("{} ", .{item});
-        } else {
-            std.debug.print("{s} ", .{item});
-        }
-    }
+    for (cycle.items) |item| dump_item(T, item);
     std.debug.print("]\n", .{});
+}
+
+fn dump_item(comptime T: type, item: T) void {
+    if (T == usize) {
+        std.debug.print("{} ", .{item});
+    } else {
+        std.debug.print("{s} ", .{item});
+    }
 }
 
 // Process line in the form of "term1 : term2 term3 ..."

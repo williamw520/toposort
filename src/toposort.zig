@@ -50,13 +50,19 @@ pub fn TopoSort(comptime T: type) type {
             return self.data.sorted_sets;
         }
 
+        pub fn get_root_set(self: *Self) ArrayList(T) {
+            return self.data.root_set;
+        }
+
         pub fn get_cycle(self: *Self) ArrayList(T) {
             return self.data.cycle;
         }
 
-        // TODO: add get_items()
+        pub fn get_items(self: *Self) ArrayList(T) {
+            return self.data.unique_items;
+        }
+
         // TODO: add get_dependents()
-        // TODO: add get_root_set();
 
         fn resolve(self: *Self) !void {
             // counts of incoming leading links to each item.
@@ -75,7 +81,8 @@ pub fn TopoSort(comptime T: type) type {
             defer curr_zeros.deinit();
             defer next_zeros.deinit();
 
-            try find_zero_incoming(incomings, &curr_zeros); // find the initial set.
+            try scan_zero_incoming(incomings, &curr_zeros); // find the initial set.
+            try self.add_root_set(curr_zeros);
             while (curr_zeros.items.len > 0) {
                 try self.add_sorted_set(curr_zeros);        // emit items that depend on none.
                 next_zeros.clearRetainingCapacity();        // reset array for the next round.
@@ -136,11 +143,17 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn find_zero_incoming(incomings: []u32, found: *ArrayList(u32)) !void {
+        fn scan_zero_incoming(incomings: []u32, found: *ArrayList(u32)) !void {
             for (incomings, 0..) |count, id| {
                 if (count == 0) {
                     try found.append(@intCast(id));
                 }
+            }
+        }
+
+        fn add_root_set(self: *Self, root_zeros: ArrayList(u32)) !void {
+            for (root_zeros.items) |id| {
+                try self.data.root_set.append(self.get_item(id));
             }
         }
 
@@ -265,6 +278,7 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
+        root_set:       ArrayList(T),               // the root items that depend on none.
         cycle:          ArrayList(T),               // the item forming cycles.
         verbose:        bool = false,
 
@@ -274,12 +288,14 @@ fn Data(comptime T: type) type {
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
+            self.root_set = ArrayList(T).init(allocator);
             self.cycle = ArrayList(T).init(allocator);
             return self;
         }
 
         fn deinit_obj(self: *Self, allocator: Allocator) void {
             self.cycle.deinit();
+            self.root_set.deinit();
             self.free_sorted_sets();
             self.dependencies.deinit();
             self.free_dependents(allocator);
