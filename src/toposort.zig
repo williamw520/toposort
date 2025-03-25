@@ -33,15 +33,15 @@ pub fn TopoSort(comptime T: type) type {
             const lead_id   = if (leading) |lead| try self.add_item(lead) else null;
             const dep       = Dependency { .lead_id = lead_id, .dep_id = dep_id };
             try self.data.dependencies.append(dep);
-            try self.dump_dependency(leading, dependent);
+            // try self.dump_dependency(leading, dependent);
         }
 
         pub fn process(self: *Self) !bool {
             try self.setup_dependents();
             self.dump_dependents();
             try self.resolve();
-            try self.dump_sorted();
-            try self.dump_cycle();
+            // try self.dump_sorted();
+            // try self.dump_cycle();
             return !self.has_cycle();
         }
 
@@ -90,8 +90,8 @@ pub fn TopoSort(comptime T: type) type {
             }
             try self.collect_cycled_items(visited);
 
-            try self.dump_incomings(incomings);
-            try self.dump_visited(visited);
+            // try self.dump_incomings(incomings);
+            // try self.dump_visited(visited);
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {

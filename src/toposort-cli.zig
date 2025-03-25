@@ -18,7 +18,6 @@ pub fn main() !void {
     {
         var args = try CmdArgs.init(g_allocator);
         defer args.deinit();
-        std.debug.print("file: {s}, is_int: {}\n", .{ args.data_file, args.is_int });
 
         const file_data = try read_file(args.data_file);
         defer g_allocator.free(file_data);
@@ -58,18 +57,18 @@ fn process_data(comptime T: type, file_data: []const u8) !void {
         std.debug.print("Processing succeeded.\n", .{});
         dump_result(T, &tsort);
     } else {
-        std.debug.print("Error in processing.\n", .{});
-        dump_result(T, &tsort);
+        std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
         dump_cycle(T, &tsort);
+        dump_result(T, &tsort);
     }
 }
 
 fn dump_result(comptime T: type, tsort: *TopoSort(T)) void {
     std.debug.print("Topologically sorted: [", .{});
     const result: ArrayList(ArrayList(T)) = tsort.get_sorted_sets();
-    for (result.items) |list| {
+    for (result.items) |set| {
         std.debug.print(" {{ ", .{});
-        for (list.items) |item| {
+        for (set.items) |item| {
             if (T == usize) {
                 std.debug.print("{} ", .{item});
             } else {
@@ -121,14 +120,14 @@ fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
 const CmdArgs = struct {
     arg_itr:        ArgIterator,
     program:        []const u8,
-    data_file:      []const u8,
-    is_int:         bool,
+    data_file:      []const u8,         // the dependency data file.
+    is_int:         bool,               // process the terms in file as number.
 
     fn init(allocator: Allocator) !CmdArgs {
         var args = CmdArgs {
             .arg_itr = try std.process.argsWithAllocator(allocator),
             .program = "",
-            .data_file = "data.txt",    // default to dependency file in the working dir.
+            .data_file = "data.txt",    // default to data.txt in the working dir.
             .is_int = false,
         };
         var argv = args.arg_itr;
