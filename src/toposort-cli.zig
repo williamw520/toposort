@@ -13,8 +13,6 @@ const TopoSort = toposort.TopoSort;
 
 
 pub fn main() !void {
-    std.debug.print("\n", .{});
-
     {
         var args = try CmdArgs.init(g_allocator);
         defer args.deinit();
@@ -24,10 +22,10 @@ pub fn main() !void {
 
         if (args.is_int) {
             const T = usize;
-            try process_data(T, file_data);
+            try process_data(T, file_data, args.is_verbose);
         } else {
             const T = []const u8;
-            try process_data(T, file_data);
+            try process_data(T, file_data, args.is_verbose);
         }
     }
 
@@ -44,8 +42,8 @@ fn read_file(data_file: []const u8) ![]const u8 {
     return file_data;
 }
 
-fn process_data(comptime T: type, file_data: []const u8) !void {
-    var tsort = try TopoSort(T).init(g_allocator);
+fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void {
+    var tsort = try TopoSort(T).init(g_allocator, is_verbose);
     defer tsort.deinit();
 
     var lines = std.mem.tokenizeScalar(u8, file_data, '\n');
@@ -122,6 +120,7 @@ const CmdArgs = struct {
     program:        []const u8,
     data_file:      []const u8,         // the dependency data file.
     is_int:         bool,               // process the terms in file as number.
+    is_verbose:     bool,
 
     fn init(allocator: Allocator) !CmdArgs {
         var args = CmdArgs {
@@ -129,6 +128,7 @@ const CmdArgs = struct {
             .program = "",
             .data_file = "data.txt",    // default to data.txt in the working dir.
             .is_int = false,
+            .is_verbose = false,        // dump processing states.
         };
         var argv = args.arg_itr;
         args.program = argv.next() orelse "";
@@ -138,6 +138,8 @@ const CmdArgs = struct {
                 args.data_file = std.mem.sliceTo(argv.next(), 0) orelse "data.txt";
             } else if (std.mem.eql(u8, arg, "--int")) {
                 args.is_int = true;
+            } else if (std.mem.eql(u8, arg, "--verbose")) {
+                args.is_verbose = true;
             }
         }
         return args;

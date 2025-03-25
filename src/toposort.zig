@@ -13,8 +13,9 @@ pub fn TopoSort(comptime T: type) type {
         allocator:  Allocator,
         data:       *Data(T),
 
-        pub fn init(allocator: Allocator) !Self {
+        pub fn init(allocator: Allocator, verbose: bool) !Self {
             const data_ptr = try allocator.create(Data(T));
+            data_ptr.verbose = verbose;
             return .{
                 .allocator = allocator,
                 .data = try data_ptr.init_obj(allocator),
@@ -33,20 +34,16 @@ pub fn TopoSort(comptime T: type) type {
             const lead_id   = if (leading) |lead| try self.add_item(lead) else null;
             const dep       = Dependency { .lead_id = lead_id, .dep_id = dep_id };
             try self.data.dependencies.append(dep);
-            // try self.dump_dependency(leading, dependent);
+            if (self.data.verbose) try self.dump_dependency(leading, dependent);
         }
 
         pub fn process(self: *Self) !bool {
             try self.setup_dependents();
-            self.dump_dependents();
+            if (self.data.verbose) self.dump_dependents();
             try self.resolve();
-            // try self.dump_sorted();
-            // try self.dump_cycle();
+            if (self.data.verbose) try self.dump_sorted();
+            if (self.data.verbose) try self.dump_cycle();
             return !self.has_cycle();
-        }
-
-        pub fn has_cycle(self: *Self) bool {
-            return self.data.cycle.items.len > 0;
         }
 
         pub fn get_sorted_sets(self: *Self) ArrayList(ArrayList(T)) {
@@ -56,6 +53,10 @@ pub fn TopoSort(comptime T: type) type {
         pub fn get_cycle(self: *Self) ArrayList(T) {
             return self.data.cycle;
         }
+
+        // TODO: add get_items()
+        // TODO: add get_dependents()
+        // TODO: add get_root_set();
 
         fn resolve(self: *Self) !void {
             // counts of incoming leading links to each item.
@@ -90,8 +91,8 @@ pub fn TopoSort(comptime T: type) type {
             }
             try self.collect_cycled_items(visited);
 
-            // try self.dump_incomings(incomings);
-            // try self.dump_visited(visited);
+            if (self.data.verbose) try self.dump_incomings(incomings);
+            if (self.data.verbose) try self.dump_visited(visited);
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {
@@ -159,6 +160,10 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
+        fn has_cycle(self: *Self) bool {
+            return self.data.cycle.items.len > 0;
+        }
+
         fn dump_dependency(self: *Self, leading: ?T, dependent: T) !void {
             const depend_id     = self.get_id(dependent);
             const depend_txt    = try as_alloc_str(T, dependent, self.allocator);
@@ -202,7 +207,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        pub fn dump_sorted(self: *Self) !void {
+        fn dump_sorted(self: *Self) !void {
             std.debug.print("  sorted [", .{});
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
@@ -261,6 +266,7 @@ fn Data(comptime T: type) type {
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
         cycle:          ArrayList(T),               // the item forming cycles.
+        verbose:        bool = false,
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
             self.dependencies = ArrayList(Dependency).init(allocator);
