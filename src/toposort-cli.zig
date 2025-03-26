@@ -68,6 +68,29 @@ fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void
     }
 }
 
+// Process line in the form of "term1 : term2 term3 ..."
+fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
+    var tokens      = std.mem.tokenizeScalar(u8, line, ':');
+    const first     = tokens.next() orelse "";  // first token is the depending item.
+    const dependent = std.mem.trim(u8, first, " \t\r\n");
+    if (dependent.len == 0)
+        return;
+    const dep_num   = if (T == usize) try std.fmt.parseInt(usize, dependent, 10);
+
+    const rest      = tokens.next() orelse "";  // the rest are leading/required items.
+    var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
+    while (rest_tokens.next()) |token| {
+        const lead  = std.mem.trim(u8, token, " \t\r\n");
+        if (T == usize) {
+            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(usize, lead, 10);
+            try tsort.add_dependency(lead_num, dep_num);
+        } else {
+            const lead_txt: ?T = if (lead.len == 0) null else lead;
+            try tsort.add_dependency(lead_txt, dependent);
+        }
+    }
+}
+
 fn dump_ordered(comptime T: type, result: SortResult(T)) void {
     std.debug.print("  topologically sorted: [", .{});
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
@@ -122,35 +145,7 @@ fn dump_item(comptime T: type, item: T) void {
 }
 
 fn dump_item_by_id(comptime T: type, result: SortResult(T), id: u32) void {
-    const item = result.get_item(id);
-    if (T == usize) {
-        std.debug.print("{} ", .{item});
-    } else {
-        std.debug.print("{s} ", .{item});
-    }
-}
-
-// Process line in the form of "term1 : term2 term3 ..."
-fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
-    var tokens      = std.mem.tokenizeScalar(u8, line, ':');
-    const first     = tokens.next() orelse "";  // first token is the depending item.
-    const dependent = std.mem.trim(u8, first, " \t\r\n");
-    if (dependent.len == 0)
-        return;
-    const dep_num   = if (T == usize) try std.fmt.parseInt(usize, dependent, 10);
-
-    const rest      = tokens.next() orelse "";  // the rest are leading/required items.
-    var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
-    while (rest_tokens.next()) |token| {
-        const lead  = std.mem.trim(u8, token, " \t\r\n");
-        if (T == usize) {
-            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(usize, lead, 10);
-            try tsort.add_dependency(lead_num, dep_num);
-        } else {
-            const lead_txt: ?T = if (lead.len == 0) null else lead;
-            try tsort.add_dependency(lead_txt, dependent);
-        }
-    }
+    dump_item(T, result.get_item(id));
 }
 
 
