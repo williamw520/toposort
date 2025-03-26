@@ -3,6 +3,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const indexOfScalar = std.mem.indexOfScalar;
+const StringHashMap = std.hash_map.StringHashMap;
+const AutoHashMap = std.hash_map.AutoHashMap;
 
 
 pub fn TopoSort(comptime T: type) type {
@@ -294,13 +296,9 @@ const Dependency = struct {
 // Internal struct holding all the dynamically allocated data.
 // Mainly dealing with allocation and deallocation.
 fn Data(comptime T: type) type {
-    
-    const ItemMap = std.HashMap(T, u32,
-                                ItemHashCtx(T),
-                                std.hash_map.default_max_load_percentage);
-    // const ItemMap = std.HashMap(T, u32,
-    //                             if (HashCtx) HashCtx.? else ItemHashCtx(T),
-    //                             std.hash_map.default_max_load_percentage);
+
+    // Treat slice "[]const u8" as string.
+    const ItemMap = if (T == []const u8) StringHashMap(u32) else AutoHashMap(T, u32);
 
     return struct {
         const Self = @This();
@@ -310,7 +308,7 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        cycle:          ArrayList(u32),              // the item forming cycles.
+        cycle:          ArrayList(u32),             // the item forming cycles.
         root_set_id:    ArrayList(u32),             // the root items that depend on none.
         verbose:        bool = false,
 
@@ -363,14 +361,6 @@ fn Data(comptime T: type) type {
     };
 }    
 
-fn eql_value(comptime T: type, a: T, b: T) bool {
-    if (@typeInfo(T) == .Pointer) {
-        return std.mem.eql(@typeInfo(T).Pointer.child, a, b);
-    } else {
-        return std.meta.eql(a, b);
-    }
-}
-
 // The returned str must be freed with allocator.free().
 fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
     if (@typeInfo(T) == .Pointer) {
@@ -380,27 +370,9 @@ fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
     }
 }
 
-// Default hash context for the item type T.
-fn ItemHashCtx(comptime T: type) type {
-    return struct {
-        pub fn hash(_: @This(), key: T) u64 {
-            if (@typeInfo(T) == .Pointer) {
-                // Note: this handles array of simple types.
-                var h = std.hash.Wyhash.init(0);
-                h.update(key);
-                return h.final();
-            } else {
-                // Note: this handles simple types.
-                var h = std.hash.Wyhash.init(0);
-                h.update(std.mem.asBytes(&key));
-                return h.final();
-            }
-        }
 
-        pub fn eql(_: @This(), a: T, b: T) bool {
-            return eql_value(T, a, b);
-        }
-    };
+test "test1" {
+
+
 }
-
 
