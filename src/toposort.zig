@@ -50,12 +50,16 @@ pub fn TopoSort(comptime T: type) type {
             return self.data.sorted_sets;
         }
 
-        pub fn get_cycle(self: Self) ArrayList(T) {
+        pub fn get_cycle(self: Self) ArrayList(u32) {
             return self.data.cycle;
         }
 
         pub fn get_root_set_id(self: Self) ArrayList(u32) {
             return self.data.root_set_id;
+        }
+
+        pub fn item_count(self: Self) usize {
+            return self.data.item_count();
         }
 
         pub fn get_items(self: Self) ArrayList(T) {
@@ -168,7 +172,7 @@ pub fn TopoSort(comptime T: type) type {
         fn collect_cycled_items(self: *Self, visited: []bool) !void {
             for (visited, 0..) |flag, id| {
                 if (!flag) {
-                    try self.data.cycle.append(self.get_item(id));
+                    try self.data.cycle.append(@intCast(id));
                 }
             }
         }
@@ -238,8 +242,8 @@ pub fn TopoSort(comptime T: type) type {
 
         fn dump_cycle(self: Self) !void {
             std.debug.print("  cycle: [ ", .{});
-            for (self.data.cycle.items) |item| {
-                const id = self.get_id(item);
+            for (self.data.cycle.items) |id| {
+                const item = self.get_item(id);
                 const txt = try as_alloc_str(T, item, self.allocator);
                 defer self.allocator.free(txt);
                 std.debug.print("{any}:{s} ", .{id, txt});
@@ -278,7 +282,7 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        cycle:          ArrayList(T),               // the item forming cycles.
+        cycle:          ArrayList(u32),              // the item forming cycles.
         root_set_id:    ArrayList(u32),             // the root items that depend on none.
         verbose:        bool = false,
 
@@ -288,7 +292,7 @@ fn Data(comptime T: type) type {
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
-            self.cycle = ArrayList(T).init(allocator);
+            self.cycle = ArrayList(u32).init(allocator);
             self.root_set_id = ArrayList(u32).init(allocator);
             return self;
         }

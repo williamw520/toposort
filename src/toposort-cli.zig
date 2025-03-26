@@ -85,8 +85,7 @@ fn dump_items(comptime T: type, tsort: TopoSort(T)) void {
 
 fn dump_cycle(comptime T: type, tsort: TopoSort(T)) void {
     std.debug.print("  cycle: [ ", .{});
-    const cycle: ArrayList(T) = tsort.get_cycle();
-    for (cycle.items) |item| dump_item(T, item);
+    for (tsort.get_cycle().items) |id| dump_item_by_id(T, tsort, id);
     std.debug.print("]\n", .{});
 }
 
