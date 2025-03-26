@@ -53,17 +53,19 @@ fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void
 
     if (try tsort.process()) {
         std.debug.print("Processing succeeded.\n", .{});
-        dump_ordered(T, &tsort);
-        dump_items(T, &tsort);
+        dump_ordered(T, tsort);
+        dump_items(T, tsort);
+        dump_dep_tree(T, tsort);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
-        dump_ordered(T, &tsort);
-        dump_items(T, &tsort);
-        dump_cycle(T, &tsort);
+        dump_ordered(T, tsort);
+        dump_items(T, tsort);
+        dump_cycle(T, tsort);
+        dump_dep_tree(T, tsort);
     }
 }
 
-fn dump_ordered(comptime T: type, tsort: *TopoSort(T)) void {
+fn dump_ordered(comptime T: type, tsort: TopoSort(T)) void {
     std.debug.print("  topologically sorted: [", .{});
     const result: ArrayList(ArrayList(T)) = tsort.get_sorted_sets();
     for (result.items) |set| {
@@ -74,21 +76,52 @@ fn dump_ordered(comptime T: type, tsort: *TopoSort(T)) void {
     std.debug.print(" ]\n", .{});
 }
 
-fn dump_items(comptime T: type, tsort: *TopoSort(T)) void {
+fn dump_items(comptime T: type, tsort: TopoSort(T)) void {
     std.debug.print("  items: [ ", .{});
     const list: ArrayList(T) = tsort.get_items();
     for (list.items) |item| dump_item(T, item);
     std.debug.print("]\n", .{});
 }
 
-fn dump_cycle(comptime T: type, tsort: *TopoSort(T)) void {
+fn dump_cycle(comptime T: type, tsort: TopoSort(T)) void {
     std.debug.print("  cycle: [ ", .{});
     const cycle: ArrayList(T) = tsort.get_cycle();
     for (cycle.items) |item| dump_item(T, item);
     std.debug.print("]\n", .{});
 }
 
+fn dump_dep_tree(comptime T: type, tsort: TopoSort(T)) void {
+    dump_tree(T, tsort, null, tsort.get_root_set_id(), 0);
+}
+
+fn dump_tree(comptime T: type, tsort: TopoSort(T), lead_id: ?u32, item_ids: ArrayList(u32), indent: usize) void {
+    if (item_ids.items.len == 0)
+        return;
+    std.debug.print("{s: <[width]}", .{.value = "", .width = indent});
+    if (lead_id) |id| {
+        dump_item_by_id(T, tsort, id);
+        std.debug.print("-> ", .{});
+    }
+    std.debug.print("[ ", .{});
+    for (item_ids.items) |item_id| {
+        dump_item_by_id(T, tsort, item_id);
+    }
+    std.debug.print("]\n", .{});
+    for (item_ids.items) |item_id| {
+        dump_tree(T, tsort, item_id, tsort.get_dependents(item_id), indent + 2);
+    }
+}
+
 fn dump_item(comptime T: type, item: T) void {
+    if (T == usize) {
+        std.debug.print("{} ", .{item});
+    } else {
+        std.debug.print("{s} ", .{item});
+    }
+}
+
+fn dump_item_by_id(comptime T: type, tsort: TopoSort(T), id: u32) void {
+    const item = tsort.get_item(id);
     if (T == usize) {
         std.debug.print("{} ", .{item});
     } else {

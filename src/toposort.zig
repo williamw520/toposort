@@ -46,23 +46,33 @@ pub fn TopoSort(comptime T: type) type {
             return !self.has_cycle();
         }
 
-        pub fn get_sorted_sets(self: *Self) ArrayList(ArrayList(T)) {
+        pub fn get_sorted_sets(self: Self) ArrayList(ArrayList(T)) {
             return self.data.sorted_sets;
         }
 
-        pub fn get_root_set(self: *Self) ArrayList(T) {
-            return self.data.root_set;
-        }
-
-        pub fn get_cycle(self: *Self) ArrayList(T) {
+        pub fn get_cycle(self: Self) ArrayList(T) {
             return self.data.cycle;
         }
 
-        pub fn get_items(self: *Self) ArrayList(T) {
+        pub fn get_root_set_id(self: Self) ArrayList(u32) {
+            return self.data.root_set_id;
+        }
+
+        pub fn get_items(self: Self) ArrayList(T) {
             return self.data.unique_items;
         }
 
-        // TODO: add get_dependents()
+        pub fn get_item(self: Self, id: usize) T {
+            return self.data.unique_items.items[id];
+        }
+
+        pub fn get_id(self: Self, item: T) ?u32 {
+            return self.data.item_map.get(item);
+        }
+
+        pub fn get_dependents(self: Self, id: u32) ArrayList(u32) {
+            return self.data.dependents[id];
+        }
 
         fn resolve(self: *Self) !void {
             // counts of incoming leading links to each item.
@@ -113,14 +123,6 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn get_item(self: *Self, id: usize) T {
-            return self.data.unique_items.items[id];
-        }
-
-        fn get_id(self: *Self, item: T) ?u32 {
-            return self.data.item_map.get(item);
-        }
-
         fn setup_dependents(self: *Self) !void {
             // re-alloc the dependents array based on the current item count.
             try self.data.realloc_dependents(self.allocator);
@@ -152,9 +154,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn add_root_set(self: *Self, root_zeros: ArrayList(u32)) !void {
-            for (root_zeros.items) |id| {
-                try self.data.root_set.append(self.get_item(id));
-            }
+            try self.data.root_set_id.appendSlice(root_zeros.items);
         }
 
         fn add_sorted_set(self: *Self, curr_zeros: ArrayList(u32)) !void {
@@ -173,11 +173,11 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn has_cycle(self: *Self) bool {
+        fn has_cycle(self: Self) bool {
             return self.data.cycle.items.len > 0;
         }
 
-        fn dump_dependency(self: *Self, leading: ?T, dependent: T) !void {
+        fn dump_dependency(self: Self, leading: ?T, dependent: T) !void {
             const depend_id     = self.get_id(dependent);
             const depend_txt    = try as_alloc_str(T, dependent, self.allocator);
             defer self.allocator.free(depend_txt);
@@ -192,7 +192,7 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn dump_dependents(self: *Self) void {
+        fn dump_dependents(self: Self) void {
             std.debug.print("  dependents: [", .{});
             for (self.data.dependents) |list| {
                 std.debug.print(" {any} ", .{list.items});
@@ -200,7 +200,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print(" ]\n", .{});
         }
 
-        fn dump_visited(self: *Self, visited: []bool) !void {
+        fn dump_visited(self: Self, visited: []bool) !void {
             std.debug.print("  visited: [ ", .{});
             for (visited, 0..) |flag, id| {
                 const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
@@ -210,7 +210,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_incomings(self: *Self, incomings: []u32) !void {
+        fn dump_incomings(self: Self, incomings: []u32) !void {
             std.debug.print("  incomings: [ ", .{});
             for (incomings, 0..) |count, id| {
                 const txt = try as_alloc_str(T, self.get_item(id), self.allocator);
@@ -220,7 +220,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_sorted(self: *Self) !void {
+        fn dump_sorted(self: Self) !void {
             std.debug.print("  sorted [", .{});
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
@@ -236,7 +236,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print(" ]\n", .{});
         }
 
-        fn dump_cycle(self: *Self) !void {
+        fn dump_cycle(self: Self) !void {
             std.debug.print("  cycle: [ ", .{});
             for (self.data.cycle.items) |item| {
                 const id = self.get_id(item);
@@ -278,8 +278,8 @@ fn Data(comptime T: type) type {
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
         dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        root_set:       ArrayList(T),               // the root items that depend on none.
         cycle:          ArrayList(T),               // the item forming cycles.
+        root_set_id:    ArrayList(u32),             // the root items that depend on none.
         verbose:        bool = false,
 
         fn init_obj(self: *Self, allocator: Allocator) !*Self {
@@ -288,14 +288,14 @@ fn Data(comptime T: type) type {
             self.unique_items = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
-            self.root_set = ArrayList(T).init(allocator);
             self.cycle = ArrayList(T).init(allocator);
+            self.root_set_id = ArrayList(u32).init(allocator);
             return self;
         }
 
         fn deinit_obj(self: *Self, allocator: Allocator) void {
             self.cycle.deinit();
-            self.root_set.deinit();
+            self.root_set_id.deinit();
             self.free_sorted_sets();
             self.dependencies.deinit();
             self.free_dependents(allocator);
