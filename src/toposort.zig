@@ -29,7 +29,7 @@ pub fn TopoSort(comptime T: type) type {
             self.allocator.destroy(self.data);
         }
 
-        // The items are stored by value.  The memory for items are not duplicated.
+        // Items are stored by value.  The memory for items are not duplicated.
         // For slice and pointer type items, memory is managed and retained by the caller.
         pub fn add_dependency(self: *Self, leading: ?T, dependent: T) !void {
             const dep_id    = try self.add_item(dependent);
@@ -39,26 +39,30 @@ pub fn TopoSort(comptime T: type) type {
             if (self.data.verbose) try self.dump_dependency(leading, dependent);
         }
 
-        pub fn process(self: *Self) !SortResult(T) {
+        // Perform the topological sort.
+        pub fn sort(self: *Self) !SortResult(T) {
+            // counts of incoming leading links to each item.
+            const incomings: []u32 = try self.allocator.alloc(u32, self.data.item_count());
+            defer self.allocator.free(incomings);
+            try self.setup_incomings(incomings);
+
+            // track whether an item has been resolveed.
+            const visited: []bool = try self.allocator.alloc(bool, self.data.item_count());
+            defer self.allocator.free(visited);
+            @memset(visited, false);
+            
             try self.setup_dependents();
+            try self.run_alogrithm(incomings, visited);
+
             if (self.data.verbose) self.dump_dependents();
-            try self.resolve();
+            if (self.data.verbose) try self.dump_incomings(incomings);
+            if (self.data.verbose) try self.dump_visited(visited);
             if (self.data.verbose) try self.dump_sorted();
             if (self.data.verbose) try self.dump_cycle();
             return SortResult(T).init(self.data);
         }
 
-        fn resolve(self: *Self) !void {
-            // counts of incoming leading links to each item.
-            var incomings: []u32 = try self.allocator.alloc(u32, self.data.item_count());
-            defer self.allocator.free(incomings);
-            try self.setup_incomings(incomings);
-
-            // track whether an item has been processed.
-            var visited: []bool = try self.allocator.alloc(bool, self.data.item_count());
-            defer self.allocator.free(visited);
-            @memset(visited, false);
-
+        fn run_alogrithm(self: *Self, incomings: []u32, visited: []bool) !void {
             // items that have no incoming leading links, i.e. they have no dependency.
             var curr_zeros = ArrayList(u32).init(self.allocator);
             var next_zeros = ArrayList(u32).init(self.allocator);
@@ -81,9 +85,6 @@ pub fn TopoSort(comptime T: type) type {
                 std.mem.swap(ArrayList(u32), &curr_zeros, &next_zeros);
             }
             try self.collect_cycled_items(visited);
-
-            if (self.data.verbose) try self.dump_incomings(incomings);
-            if (self.data.verbose) try self.dump_visited(visited);
         }
 
         fn add_item(self: *Self, input_item: T) !u32 {
@@ -127,7 +128,7 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn scan_zero_incoming(incomings: []u32, found: *ArrayList(u32)) !void {
+        fn scan_zero_incoming(incomings: [] const u32, found: *ArrayList(u32)) !void {
             for (incomings, 0..) |count, id| {
                 if (count == 0) {
                     try found.append(@intCast(id));
@@ -232,7 +233,7 @@ pub fn TopoSort(comptime T: type) type {
 }
 
 
-/// This is returned by TopoSort.process().  Cannot be created by itself.
+/// This is returned by TopoSort.resolve().  Cannot be created by itself.
 /// This has the same lifetime as TopoSort.
 pub fn SortResult(comptime T: type) type {
     return struct {

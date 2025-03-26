@@ -44,16 +44,20 @@ fn read_file(data_file: []const u8) ![]const u8 {
 }
 
 fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void {
+    // This starts the steps of using TopoSort.
     var tsort = try TopoSort(T).init(g_allocator, is_verbose);
     defer tsort.deinit();
 
+    // Add the dependency of each line to TopoSort.
     var lines = std.mem.tokenizeScalar(u8, file_data, '\n');
     while (lines.next()) |line| {
         try process_line(line, T, &tsort);
     }
 
-    const result = try tsort.process();
+    // Do the sort.
+    const result = try tsort.sort();
 
+    // Print the result.
     if (!result.has_cycle()) {
         std.debug.print("Processing succeeded.\n", .{});
         dump_ordered(T, result);
@@ -136,16 +140,16 @@ fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32, item_ids: A
     }
 }
 
+fn dump_item_by_id(comptime T: type, result: SortResult(T), id: u32) void {
+    dump_item(T, result.get_item(id));
+}
+
 fn dump_item(comptime T: type, item: T) void {
     if (T == usize) {
         std.debug.print("{} ", .{item});
     } else {
         std.debug.print("{s} ", .{item});
     }
-}
-
-fn dump_item_by_id(comptime T: type, result: SortResult(T), id: u32) void {
-    dump_item(T, result.get_item(id));
 }
 
 
