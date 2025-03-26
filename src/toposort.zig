@@ -37,45 +37,13 @@ pub fn TopoSort(comptime T: type) type {
             if (self.data.verbose) try self.dump_dependency(leading, dependent);
         }
 
-        pub fn process(self: *Self) !bool {
+        pub fn process(self: *Self) !SortResult(T) {
             try self.setup_dependents();
             if (self.data.verbose) self.dump_dependents();
             try self.resolve();
             if (self.data.verbose) try self.dump_sorted();
             if (self.data.verbose) try self.dump_cycle();
-            return !self.has_cycle();
-        }
-
-        pub fn get_sorted_sets(self: Self) ArrayList(ArrayList(T)) {
-            return self.data.sorted_sets;
-        }
-
-        pub fn get_cycle(self: Self) ArrayList(u32) {
-            return self.data.cycle;
-        }
-
-        pub fn get_root_set_id(self: Self) ArrayList(u32) {
-            return self.data.root_set_id;
-        }
-
-        pub fn item_count(self: Self) usize {
-            return self.data.item_count();
-        }
-
-        pub fn get_items(self: Self) ArrayList(T) {
-            return self.data.unique_items;
-        }
-
-        pub fn get_item(self: Self, id: usize) T {
-            return self.data.unique_items.items[id];
-        }
-
-        pub fn get_id(self: Self, item: T) ?u32 {
-            return self.data.item_map.get(item);
-        }
-
-        pub fn get_dependents(self: Self, id: u32) ArrayList(u32) {
-            return self.data.dependents[id];
+            return SortResult(T).init(self.data);
         }
 
         fn resolve(self: *Self) !void {
@@ -127,6 +95,14 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
+        fn get_item(self: Self, id: usize) T {
+            return self.data.unique_items.items[id];
+        }
+
+        fn get_id(self: Self, item: T) ?u32 {
+            return self.data.item_map.get(item);
+        }
+
         fn setup_dependents(self: *Self) !void {
             // re-alloc the dependents array based on the current item count.
             try self.data.realloc_dependents(self.allocator);
@@ -175,10 +151,6 @@ pub fn TopoSort(comptime T: type) type {
                     try self.data.cycle.append(@intCast(id));
                 }
             }
-        }
-
-        fn has_cycle(self: Self) bool {
-            return self.data.cycle.items.len > 0;
         }
 
         fn dump_dependency(self: Self, leading: ?T, dependent: T) !void {
@@ -253,6 +225,58 @@ pub fn TopoSort(comptime T: type) type {
         
     };
 
+}
+
+
+pub fn SortResult(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        data:   *Data(T),
+
+        fn init(data: *Data(T)) Self {
+            return .{
+                .data = data,
+            };
+        }
+
+        pub fn get_sorted_sets(self: Self) ArrayList(ArrayList(T)) {
+            return self.data.sorted_sets;
+        }
+
+        pub fn get_cycle(self: Self) ArrayList(u32) {
+            return self.data.cycle;
+        }
+
+        pub fn has_cycle(self: Self) bool {
+            return self.data.cycle.items.len > 0;
+        }
+
+        pub fn get_root_set_id(self: Self) ArrayList(u32) {
+            return self.data.root_set_id;
+        }
+
+        pub fn item_count(self: Self) usize {
+            return self.data.item_count();
+        }
+
+        pub fn get_items(self: Self) ArrayList(T) {
+            return self.data.unique_items;
+        }
+
+        pub fn get_item(self: Self, id: usize) T {
+            return self.data.unique_items.items[id];
+        }
+
+        pub fn get_id(self: Self, item: T) ?u32 {
+            return self.data.item_map.get(item);
+        }
+
+        pub fn get_dependents(self: Self, id: u32) ArrayList(u32) {
+            return self.data.dependents[id];
+        }
+
+    };
 }
 
 
