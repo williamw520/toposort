@@ -134,6 +134,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn add_root_set(self: *Self, root_zeros: ArrayList(u32)) !void {
+            self.data.root_set_id.clearRetainingCapacity();
             try self.data.root_set_id.appendSlice(root_zeros.items);
         }
 
@@ -146,6 +147,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn collect_cycled_items(self: *Self, visited: []bool) !void {
+            self.data.cycle.clearRetainingCapacity();
             for (visited, 0..) |flag, id| {
                 if (!flag) {
                     try self.data.cycle.append(@intCast(id));
@@ -228,6 +230,8 @@ pub fn TopoSort(comptime T: type) type {
 }
 
 
+/// This is returned by TopoSort.process().  Cannot be created by itself.
+/// This has the same lifetime as TopoSort.
 pub fn SortResult(comptime T: type) type {
     return struct {
         const Self = @This();
