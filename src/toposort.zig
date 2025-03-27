@@ -401,7 +401,9 @@ fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
 test {
     const tests = @import("tests.zig");
 
-    try tests.test1();
+    try tests.benchmark1();
+    try tests.benchmark2();
+    try tests.benchmark3();
     
 }
 
