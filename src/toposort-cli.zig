@@ -7,10 +7,10 @@ const ArrayList = std.ArrayList;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const g_allocator = gpa.allocator();
-// const g_allocator = std.heap.page_allocator;
 
 const TopoSort = toposort.TopoSort;
 const SortResult = toposort.SortResult;
+const IntItem = usize;
 
 
 pub fn main() !void {
@@ -22,7 +22,7 @@ pub fn main() !void {
         defer g_allocator.free(file_data);
 
         if (args.is_int) {
-            const T = usize;
+            const T = IntItem;
             try process_data(T, file_data, args.is_verbose);
         } else {
             const T = []const u8;
@@ -45,7 +45,7 @@ fn read_file(data_file: []const u8) ![]const u8 {
 
 fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void {
     // This starts the steps of using TopoSort.
-    var tsort = try TopoSort(T).init(g_allocator, is_verbose);
+    var tsort = try TopoSort(T).init(g_allocator, .{ .verbose = is_verbose });
     defer tsort.deinit();
 
     // Add the dependency of each line to TopoSort.
@@ -62,13 +62,13 @@ fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void
         std.debug.print("Processing succeeded.\n", .{});
         dump_ordered(T, result);
         dump_items(T, result);
-        dump_dep_tree(T, result);
+        // dump_dep_tree(T, result);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
         dump_ordered(T, result);
         dump_items(T, result);
         dump_cycle(T, result);
-        dump_dep_tree(T, result);
+        // dump_dep_tree(T, result);
     }
 }
 
@@ -79,14 +79,14 @@ fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
     const dependent = std.mem.trim(u8, first, " \t\r\n");
     if (dependent.len == 0)
         return;
-    const dep_num   = if (T == usize) try std.fmt.parseInt(usize, dependent, 10);
+    const dep_num   = if (T == IntItem) try std.fmt.parseInt(IntItem, dependent, 10);
 
     const rest      = tokens.next() orelse "";  // the rest are leading/required items.
     var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
     while (rest_tokens.next()) |token| {
         const lead  = std.mem.trim(u8, token, " \t\r\n");
-        if (T == usize) {
-            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(usize, lead, 10);
+        if (T == IntItem) {
+            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(IntItem, lead, 10);
             try tsort.add_dependency(lead_num, dep_num);
         } else {
             const lead_txt: ?T = if (lead.len == 0) null else lead;
@@ -123,7 +123,8 @@ fn dump_dep_tree(comptime T: type, result: SortResult(T)) void {
     dump_tree(T, result, null, result.get_root_set_id(), 2);
 }
 
-fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32, item_ids: ArrayList(u32), indent: usize) void {
+fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32,
+             item_ids: ArrayList(u32), indent: usize) void {
     if (item_ids.items.len == 0)
         return;
     std.debug.print("{s: <[width]}", .{.value = "", .width = indent});
@@ -146,7 +147,7 @@ fn dump_item_by_id(comptime T: type, result: SortResult(T), id: u32) void {
 }
 
 fn dump_item(comptime T: type, item: T) void {
-    if (T == usize) {
+    if (T == IntItem) {
         std.debug.print("{} ", .{item});
     } else {
         std.debug.print("{s} ", .{item});

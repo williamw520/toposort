@@ -17,9 +17,6 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        // .zbench = .{
-        //     .url = "https://github.com/hendriknielaender/zBench/archive/refs/tags/v0.9.3.tar.gz",
-        // },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding

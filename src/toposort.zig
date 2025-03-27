@@ -16,9 +16,14 @@ pub fn TopoSort(comptime T: type) type {
         allocator:  Allocator,
         data:       *Data(T),   // copies of TopoSort have the same Data pointer.
 
-        pub fn init(allocator: Allocator, verbose: bool) !Self {
+        // pub fn init(allocator: Allocator) !Self {
+        //     return init_ex(allocator, .{});
+        // }
+
+        pub fn init(allocator: Allocator,
+                    options: struct { verbose: bool = false } ) !Self {
             const data_ptr = try allocator.create(Data(T));
-            data_ptr.verbose = verbose;
+            data_ptr.verbose = options.verbose;
             return .{
                 .allocator = allocator,
                 .data = try data_ptr.init_obj(allocator),
@@ -42,6 +47,10 @@ pub fn TopoSort(comptime T: type) type {
 
         // Perform the topological sort.
         pub fn sort(self: *Self) !SortResult(T) {
+            // set up the item to dependents mapping, before setting up incomings.
+            try self.setup_dependents();
+            if (self.data.verbose) self.dump_dependents();
+
             // counts of incoming leading links to each item.
             const incomings: []u32 = try self.allocator.alloc(u32, self.data.item_count());
             defer self.allocator.free(incomings);
@@ -52,11 +61,15 @@ pub fn TopoSort(comptime T: type) type {
             defer self.allocator.free(visited);
             @memset(visited, false);
             
-            try self.setup_dependents();
+            if (self.data.verbose) {
+                try self.dump_items();
+                try self.dump_incomings(incomings);
+                try self.dump_visited(visited);
+            }
+
             try self.run_alogrithm(incomings, visited);
 
             if (self.data.verbose) {
-                self.dump_dependents();
                 try self.dump_incomings(incomings);
                 try self.dump_visited(visited);
                 try self.dump_sorted();
@@ -182,6 +195,16 @@ pub fn TopoSort(comptime T: type) type {
                 std.debug.print(" {any} ", .{list.items});
             }
             std.debug.print(" ]\n", .{});
+        }
+
+        fn dump_items(self: Self) !void {
+            std.debug.print("  items: [ ", .{});
+            for (self.data.unique_items.items, 0..) |item, id| {
+                const txt = try as_alloc_str(T, item, self.allocator);
+                defer self.allocator.free(txt);
+                std.debug.print("{}:{s}, ", .{id, txt});
+            }
+            std.debug.print("]\n", .{});
         }
 
         fn dump_visited(self: Self, visited: []bool) !void {
