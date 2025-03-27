@@ -21,8 +21,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .strip = strip_debug_symbols,
     });
-
     cli_exe_mod.addImport("toposort", toposort_mod);
+
+    const exe = b.addExecutable(.{
+        .name = "toposort",
+        .root_module = cli_exe_mod,
+    });
+    b.installArtifact(exe);
 
     // Not generating a static lib.
     // const lib = b.addLibrary(.{
@@ -31,12 +36,6 @@ pub fn build(b: *std.Build) void {
     //     .root_module = toposort_mod,
     // });
     // b.installArtifact(lib);
-
-    const exe = b.addExecutable(.{
-        .name = "toposort",
-        .root_module = cli_exe_mod,
-    });
-    b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
 

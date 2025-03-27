@@ -96,7 +96,7 @@ fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
 }
 
 fn dump_ordered(comptime T: type, result: SortResult(T)) void {
-    std.debug.print("  topologically sorted: [", .{});
+    std.debug.print("  Topologically sorted: [", .{});
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |set| {
         std.debug.print(" {{ ", .{});
@@ -107,19 +107,20 @@ fn dump_ordered(comptime T: type, result: SortResult(T)) void {
 }
 
 fn dump_items(comptime T: type, result: SortResult(T)) void {
-    std.debug.print("  items: [ ", .{});
+    std.debug.print("  Items: [ ", .{});
     for (result.get_items().items) |item| dump_item(T, item);
     std.debug.print("]\n", .{});
 }
 
 fn dump_cycle(comptime T: type, result: SortResult(T)) void {
-    std.debug.print("  cycle: [ ", .{});
+    std.debug.print("  Cycle: [ ", .{});
     for (result.get_cycle().items) |id| dump_item_by_id(T, result, id);
     std.debug.print("]\n", .{});
 }
 
 fn dump_dep_tree(comptime T: type, result: SortResult(T)) void {
-    dump_tree(T, result, null, result.get_root_set_id(), 0);
+    std.debug.print("  Dependency tree:\n", .{});
+    dump_tree(T, result, null, result.get_root_set_id(), 2);
 }
 
 fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32, item_ids: ArrayList(u32), indent: usize) void {

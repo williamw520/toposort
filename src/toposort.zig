@@ -55,16 +55,18 @@ pub fn TopoSort(comptime T: type) type {
             try self.setup_dependents();
             try self.run_alogrithm(incomings, visited);
 
-            if (self.data.verbose) self.dump_dependents();
-            if (self.data.verbose) try self.dump_incomings(incomings);
-            if (self.data.verbose) try self.dump_visited(visited);
-            if (self.data.verbose) try self.dump_sorted();
-            if (self.data.verbose) try self.dump_cycle();
+            if (self.data.verbose) {
+                self.dump_dependents();
+                try self.dump_incomings(incomings);
+                try self.dump_visited(visited);
+                try self.dump_sorted();
+                try self.dump_cycle();
+            }
             return SortResult(T).init(self.data);
         }
 
         fn run_alogrithm(self: *Self, incomings: []u32, visited: []bool) !void {
-            // items that have no incoming leading links, i.e. they have no dependency.
+            // items that have no incoming leading links, i.e. they are not dependents.
             var curr_zeros = ArrayList(u32).init(self.allocator);
             var next_zeros = ArrayList(u32).init(self.allocator);
             defer curr_zeros.deinit();
@@ -73,7 +75,7 @@ pub fn TopoSort(comptime T: type) type {
             try scan_zero_incoming(incomings, &curr_zeros); // find the initial set.
             try self.add_root_set(curr_zeros);
             while (curr_zeros.items.len > 0) {
-                try self.add_sorted_set(curr_zeros);        // emit items that depend on none.
+                try self.add_sorted_set(curr_zeros);        // emit non-dependent items.
                 next_zeros.clearRetainingCapacity();        // reset array for the next round.
                 for (curr_zeros.items) |zero_id| {
                     visited[zero_id] = true;
