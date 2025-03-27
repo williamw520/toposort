@@ -1,5 +1,6 @@
 
 const std = @import("std");
+const Type = std.builtin.Type;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const indexOfScalar = std.mem.indexOfScalar;
@@ -13,7 +14,7 @@ pub fn TopoSort(comptime T: type) type {
 
         // Pub struct wraps a small number of fields to minimize copying cost.
         allocator:  Allocator,
-        data:       *Data(T),
+        data:       *Data(T),   // copies of TopoSort have the same Data pointer.
 
         pub fn init(allocator: Allocator, verbose: bool) !Self {
             const data_ptr = try allocator.create(Data(T));
@@ -307,9 +308,9 @@ fn Data(comptime T: type) type {
         unique_items:   ArrayList(T),               // the item list, without duplicates.
         item_map:       ItemMap,                    // maps item to sequential id.
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
-        dependents:     []ArrayList(u32),           // map item to its dependent ids. [[2, 3], [], [4]]
-        sorted_sets:    ArrayList(ArrayList(T)),    // the T entry uses item memory from unique_items.
-        cycle:          ArrayList(u32),             // the item forming cycles.
+        dependents:     []ArrayList(u32),           // map item id to its dependent ids. [[2, 3], [], [4]]
+        sorted_sets:    ArrayList(ArrayList(T)),    // item sets in order; items in each set are parallel.
+        cycle:          ArrayList(u32),             // the item ids forming cycles.
         root_set_id:    ArrayList(u32),             // the root items that depend on none.
         verbose:        bool = false,
 
@@ -364,7 +365,7 @@ fn Data(comptime T: type) type {
 
 // The returned str must be freed with allocator.free().
 fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
-    if (@typeInfo(T) == .Pointer) {
+    if (@typeInfo(T) == Type.pointer) {
         return try std.fmt.allocPrint(allocator, "\"{s}\"", .{value});
     } else {
         return try std.fmt.allocPrint(allocator, "{any}", .{value});
@@ -372,8 +373,10 @@ fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
 }
 
 
-test "test1" {
+test {
+    const tests = @import("tests.zig");
 
-
+    try tests.test1();
+    
 }
 

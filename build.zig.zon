@@ -1,9 +1,11 @@
 .{
-    .name = "toposort",
-    // This is a [Semantic Version](https://semver.org/).
-    // In a future version of Zig it will be used for package deduplication.
+    .name = .toposort,
     .version = "0.0.0",
 
+    .fingerprint = 0x50e6bc6ccfc571a0,  // Changing this has security and trust implications.
+
+    .minimum_zig_version = "0.15.0-dev.117+1408288b9",
+    
     // This field is optional.
     // This is currently advisory only; Zig does not yet do anything
     // with this value.
@@ -15,6 +17,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        // .zbench = .{
+        //     .url = "https://github.com/hendriknielaender/zBench/archive/refs/tags/v0.9.3.tar.gz",
+        // },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding
