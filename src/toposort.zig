@@ -7,7 +7,7 @@ const ArrayList = std.ArrayList;
 const indexOfScalar = std.mem.indexOfScalar;
 const StringHashMap = std.hash_map.StringHashMap;
 const AutoHashMap = std.hash_map.AutoHashMap;
-
+const BitArray = bitarray.BitArray;
 
 pub fn TopoSort(comptime T: type) type {
     return struct {
@@ -54,17 +54,16 @@ pub fn TopoSort(comptime T: type) type {
             try self.setup_incomings(incomings);
 
             // track whether an item has been resolveed.
-            const visited: []bool = try self.allocator.alloc(bool, self.data.item_count());
-            defer self.allocator.free(visited);
-            @memset(visited, false);
-            
+            var visited = try BitArray.init(self.allocator, self.data.item_count());
+            defer visited.deinit(self.allocator);
+
             if (self.data.verbose) {
                 try self.dump_items();
                 try self.dump_incomings(incomings);
                 try self.dump_visited(visited);
             }
 
-            try self.run_alogrithm(incomings, visited);
+            try self.run_alogrithm(incomings, &visited);
 
             if (self.data.verbose) {
                 try self.dump_incomings(incomings);
@@ -75,7 +74,7 @@ pub fn TopoSort(comptime T: type) type {
             return SortResult(T).init(self.data);
         }
 
-        fn run_alogrithm(self: *Self, incomings: []u32, visited: []bool) !void {
+       fn run_alogrithm(self: *Self, incomings: []u32, visited: *BitArray) !void {
             // items that have no incoming leading links, i.e. they are not dependents.
             var curr_zeros = ArrayList(u32).init(self.allocator);
             var next_zeros = ArrayList(u32).init(self.allocator);
@@ -88,9 +87,9 @@ pub fn TopoSort(comptime T: type) type {
                 try self.add_sorted_set(curr_zeros);        // emit non-dependent items.
                 next_zeros.clearRetainingCapacity();        // reset array for the next round.
                 for (curr_zeros.items) |zero_id| {
-                    visited[zero_id] = true;
+                    visited.on(zero_id);
                     for (self.data.dependents[zero_id].items) |dep_id| {
-                        if (visited[dep_id]) continue;
+                        if (visited.get(dep_id)) continue;
                         incomings[dep_id] -= 1;
                         if (incomings[dep_id] == 0) try next_zeros.append(dep_id);
                     }
@@ -143,10 +142,10 @@ pub fn TopoSort(comptime T: type) type {
             try self.data.sorted_sets.append(sorted_set);
         }
 
-        fn collect_cycled_items(self: *Self, visited: []bool) !void {
+        fn collect_cycled_items(self: *Self, visited: *BitArray) !void {
             self.data.cycle.clearRetainingCapacity();
-            for (visited, 0..) |flag, id| {
-                if (!flag) {
+            for (0..visited.count) |id| {
+                if (!visited.get(id)) {
                     try self.data.cycle.append(@intCast(id));
                 }
             }
@@ -185,12 +184,12 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_visited(self: Self, visited: []bool) !void {
+        fn dump_visited(self: Self, visited: BitArray) !void {
             std.debug.print("  visited: [ ", .{});
-            for (visited, 0..) |flag, id| {
+            for (0..visited.count) |id| {
                 const txt = try as_alloc_str(T, self.data.get_item(id), self.allocator);
                 defer self.allocator.free(txt);
-                std.debug.print("{}:{s} #{}, ", .{id, txt, flag});
+                std.debug.print("{}:{s} #{}, ", .{id, txt, visited.get(id)});
             }
             std.debug.print("]\n", .{});
         }
