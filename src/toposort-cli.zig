@@ -12,6 +12,8 @@ const TopoSort = toposort.TopoSort;
 const SortResult = toposort.SortResult;
 const IntItem = usize;
 
+const MyErrors = error{ MissingRangeValue };
+
 
 pub fn main() !void {
     {
@@ -23,10 +25,10 @@ pub fn main() !void {
 
         if (args.is_int) {
             const T = IntItem;
-            try process_data(T, file_data, args.is_verbose);
+            try process_data(T, file_data, args);
         } else {
             const T = []const u8;
-            try process_data(T, file_data, args.is_verbose);
+            try process_data(T, file_data, args);
         }
     }
 
@@ -43,9 +45,10 @@ fn read_file(data_file: []const u8) ![]const u8 {
     return file_data;
 }
 
-fn process_data(comptime T: type, file_data: []const u8, is_verbose: bool) !void {
+fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
     // This starts the steps of using TopoSort.
-    var tsort = try TopoSort(T).init(g_allocator, .{ .verbose = is_verbose });
+    var tsort = try TopoSort(T).init(g_allocator,
+                                     .{ .verbose = args.is_verbose, .max_range = args.max_range });
     defer tsort.deinit();
 
     // Add the dependency of each line to TopoSort.
@@ -159,6 +162,7 @@ const CmdArgs = struct {
     arg_itr:        ArgIterator,
     program:        []const u8,
     data_file:      []const u8,         // the dependency data file.
+    max_range:      ?usize,
     is_int:         bool,               // process the terms in file as number.
     is_verbose:     bool,
 
@@ -167,6 +171,7 @@ const CmdArgs = struct {
             .arg_itr = try std.process.argsWithAllocator(allocator),
             .program = "",
             .data_file = "data.txt",    // default to data.txt in the working dir.
+            .max_range = null,
             .is_int = false,
             .is_verbose = false,        // dump processing states.
         };
@@ -178,6 +183,13 @@ const CmdArgs = struct {
                 args.data_file = std.mem.sliceTo(argv.next(), 0) orelse "data.txt";
             } else if (std.mem.eql(u8, arg, "--int")) {
                 args.is_int = true;
+            } else if (std.mem.eql(u8, arg, "--max-range")) {
+                if (std.mem.sliceTo(argv.next(), 0)) |range| {
+                    args.max_range = try std.fmt.parseInt(usize, range, 10);
+                    args.is_int = true; // setting the max numeric range is automatically an integer item.
+                } else {
+                    return error.MissingRangeValue;
+                }
             } else if (std.mem.eql(u8, arg, "--verbose")) {
                 args.is_verbose = true;
             }

@@ -108,6 +108,43 @@ pub fn benchmark3() !void {
     }
 }
 
+pub fn benchmark4() !void {
+    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    defer arena.deinit(); // Frees all allocated memory at once
+    const allocator = arena.allocator();
+
+    const T = u32;
+    const N = 1000000;
+    std.debug.print("Testing {} items, 1-to-10 chaining dependency, with max_range set.\n", .{N});
+
+    const list = try gen_int_items(N, T, allocator);
+
+    for (0..4) |_| {
+        var tsort = try TopoSort(T).init(allocator, .{ .max_range = N });
+        defer tsort.deinit();
+
+        const start_ns1 = nanoTimestamp();
+        for (0..N/10-1) |idx| {
+            const i = idx * 10;
+            try tsort.add_dependency(list.items[i], list.items[i+1]);
+            try tsort.add_dependency(list.items[i], list.items[i+2]);
+            try tsort.add_dependency(list.items[i], list.items[i+3]);
+            try tsort.add_dependency(list.items[i], list.items[i+4]);
+            try tsort.add_dependency(list.items[i], list.items[i+5]);
+            try tsort.add_dependency(list.items[i], list.items[i+6]);
+            try tsort.add_dependency(list.items[i], list.items[i+7]);
+            try tsort.add_dependency(list.items[i], list.items[i+8]);
+            try tsort.add_dependency(list.items[i], list.items[i+9]);
+            try tsort.add_dependency(list.items[i], list.items[i+10]);  // chain to next set.
+        }
+        (Timing { .n = N, .start_ns = start_ns1, .end_ns = nanoTimestamp() }).print("Add dependency");
+
+        const start_ns2 = std.time.nanoTimestamp();
+        _ = try tsort.sort();
+        (Timing { .n = N, .start_ns = start_ns2, .end_ns = nanoTimestamp() }).print("Sort");
+    }
+}
+
 
 fn gen_int_items(comptime N: usize, comptime T: type, allocator: Allocator) !ArrayList(T) {
     var list = ArrayList(T).init(allocator);
@@ -134,3 +171,4 @@ const Timing = struct {
     }
 
 };
+
