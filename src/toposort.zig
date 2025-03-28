@@ -1,5 +1,6 @@
 
 const std = @import("std");
+const bitarray = @import("bitarray.zig");
 const Type = std.builtin.Type;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;

@@ -23,7 +23,7 @@ pub fn benchmark1() !void {
 
     const list = try gen_int_items(N, T, allocator);
 
-    for (0..4) |_| {
+    for (0..2) |_| {
         var tsort = try TopoSort(T).init(allocator, .{});
         defer tsort.deinit();
 
@@ -51,7 +51,7 @@ pub fn benchmark2() !void {
 
     const list = try gen_int_items(N, T, allocator);
 
-    for (0..4) |_| {
+    for (0..2) |_| {
         var tsort = try TopoSort(T).init(allocator, .{});
         defer tsort.deinit();
 
@@ -82,7 +82,7 @@ pub fn benchmark3() !void {
 
     const list = try gen_int_items(N, T, allocator);
 
-    for (0..4) |_| {
+    for (0..2) |_| {
         var tsort = try TopoSort(T).init(allocator, .{});
         defer tsort.deinit();
 
@@ -119,7 +119,7 @@ pub fn benchmark4() !void {
 
     const list = try gen_int_items(N, T, allocator);
 
-    for (0..4) |_| {
+    for (0..2) |_| {
         var tsort = try TopoSort(T).init(allocator, .{ .max_range = N });
         defer tsort.deinit();
 
