@@ -1,6 +1,6 @@
 .{
     .name = .toposort,
-    .version = "0.0.0",
+    .version = "1.0.0",
 
     .fingerprint = 0x50e6bc6ccfc571a0,  // Changing this has security and trust implications.
 
