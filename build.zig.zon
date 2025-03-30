@@ -53,11 +53,9 @@
         // better to explicitly list the files and directories instead, to insure that
         // fetching from tarballs, file system paths, and version control all result
         // in the same contents hash.
-        "",
-        // For example...
-        //"build.zig",
-        //"build.zig.zon",
-        //"src",
+        "build.zig",
+        "build.zig.zon",
+        "src",
         //"LICENSE",
         //"README.md",
     },
