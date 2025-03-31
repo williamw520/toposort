@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const strip_debug_symbols = b.option(bool, "strip", "strip debugging symbols") orelse false;
 
-    const toposort_mod = b.createModule(.{
+    const toposort_mod = b.addModule("toposort", .{
         .root_source_file = b.path("src/toposort.zig"),
         .target = target,
         .optimize = optimize,
