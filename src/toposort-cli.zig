@@ -10,7 +10,7 @@ const g_allocator = gpa.allocator();
 
 const TopoSort = toposort.TopoSort;
 const SortResult = toposort.SortResult;
-const IntItem = usize;
+const IntNode = usize;
 
 const MyErrors = error{ MissingRangeValue };
 
@@ -19,12 +19,21 @@ pub fn main() !void {
     {
         var args = try CmdArgs.init(g_allocator);
         defer args.deinit();
+        args.parse() catch |err| {
+            std.debug.print("Error in parsing command arguments. {}\n", .{err});
+            usage(args);
+            return;
+        };
 
-        const file_data = try read_file(args.data_file);
+        const file_data = read_file(args.data_file) catch |err| {
+            std.debug.print("Error in reading the data file. {}\n", .{err});
+            usage(args);
+            return;
+        };
         defer g_allocator.free(file_data);
 
         if (args.is_int) {
-            const T = IntItem;
+            const T = IntNode;
             try process_data(T, file_data, args);
         } else {
             const T = []const u8;
@@ -64,12 +73,12 @@ fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
     if (!result.has_cycle()) {
         std.debug.print("Processing succeeded.\n", .{});
         dump_ordered(T, result);
-        dump_items(T, result);
+        dump_nodes(T, result);
         // dump_dep_tree(T, result);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
         dump_ordered(T, result);
-        dump_items(T, result);
+        dump_nodes(T, result);
         dump_cycle(T, result);
         // dump_dep_tree(T, result);
     }
@@ -78,22 +87,22 @@ fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
 // Process line in the form of "term1 : term2 term3 ..."
 fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
     var tokens      = std.mem.tokenizeScalar(u8, line, ':');
-    const first     = tokens.next() orelse "";  // first token is the depending item.
+    const first     = tokens.next() orelse "";  // first token is the depending node.
     const dependent = std.mem.trim(u8, first, " \t\r\n");
     if (dependent.len == 0)
         return;
-    const dep_num   = if (T == IntItem) try std.fmt.parseInt(IntItem, dependent, 10);
+    const dep_num   = if (T == IntNode) try std.fmt.parseInt(IntNode, dependent, 10);
 
-    const rest      = tokens.next() orelse "";  // the rest are leading/required items.
+    const rest      = tokens.next() orelse "";  // the rest are leading/required nodes.
     var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
     while (rest_tokens.next()) |token| {
         const lead  = std.mem.trim(u8, token, " \t\r\n");
-        if (T == IntItem) {
-            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(IntItem, lead, 10);
-            try tsort.add_dependency(lead_num, dep_num);
+        if (T == IntNode) {
+            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(IntNode, lead, 10);
+            try tsort.add(lead_num, dep_num);
         } else {
             const lead_txt: ?T = if (lead.len == 0) null else lead;
-            try tsort.add_dependency(lead_txt, dependent);
+            try tsort.add(lead_txt, dependent);
         }
     }
 }
@@ -103,21 +112,21 @@ fn dump_ordered(comptime T: type, result: SortResult(T)) void {
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |set| {
         std.debug.print(" {{ ", .{});
-        for (set.items) |item| dump_item(T, item);
+        for (set.items) |node| dump_node(T, node);
         std.debug.print("}} ", .{});
     }
     std.debug.print(" ]\n", .{});
 }
 
-fn dump_items(comptime T: type, result: SortResult(T)) void {
-    std.debug.print("  Items: [ ", .{});
-    for (result.get_items().items) |item| dump_item(T, item);
+fn dump_nodes(comptime T: type, result: SortResult(T)) void {
+    std.debug.print("  Nodes: [ ", .{});
+    for (result.get_nodes().items) |node| dump_node(T, node);
     std.debug.print("]\n", .{});
 }
 
 fn dump_cycle(comptime T: type, result: SortResult(T)) void {
     std.debug.print("  Cycle: [ ", .{});
-    for (result.get_cycle().items) |id| dump_item_by_id(T, result, id);
+    for (result.get_cycle().items) |id| dump_node_by_id(T, result, id);
     std.debug.print("]\n", .{});
 }
 
@@ -127,38 +136,54 @@ fn dump_dep_tree(comptime T: type, result: SortResult(T)) void {
 }
 
 fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32,
-             item_ids: ArrayList(u32), indent: usize) void {
-    if (item_ids.items.len == 0)
+             node_ids: ArrayList(u32), indent: usize) void {
+    if (node_ids.items.len == 0)
         return;
     std.debug.print("{s: <[width]}", .{.value = "", .width = indent});
     if (lead_id) |id| {
-        dump_item_by_id(T, result, id);
+        dump_node_by_id(T, result, id);
         std.debug.print("-> ", .{});
     }
     std.debug.print("[ ", .{});
-    for (item_ids.items) |item_id| {
-        dump_item_by_id(T, result, item_id);
+    for (node_ids.items) |node_id| {
+        dump_node_by_id(T, result, node_id);
     }
     std.debug.print("]\n", .{});
-    for (item_ids.items) |item_id| {
-        dump_tree(T, result, item_id, result.get_dependents(item_id), indent + 2);
+    for (node_ids.items) |node_id| {
+        dump_tree(T, result, node_id, result.get_dependents(node_id), indent + 2);
     }
 }
 
-fn dump_item_by_id(comptime T: type, result: SortResult(T), id: u32) void {
-    dump_item(T, result.get_item(id));
+fn dump_node_by_id(comptime T: type, result: SortResult(T), id: u32) void {
+    dump_node(T, result.get_node(id));
 }
 
-fn dump_item(comptime T: type, item: T) void {
-    if (T == IntItem) {
-        std.debug.print("{} ", .{item});
+fn dump_node(comptime T: type, node: T) void {
+    if (T == IntNode) {
+        std.debug.print("{} ", .{node});
     } else {
-        std.debug.print("{s} ", .{item});
+        std.debug.print("{s} ", .{node});
     }
 }
 
+fn usage(args: CmdArgs) void {
+    const program_name = std.fs.path.basename(args.program);
+    std.debug.print(
+        \\
+        \\Usage:
+        \\  {s} --data data.file [--int] [--max-range N] [--verbose]
+        \\
+        \\      --data data.file  - contains the dependency node pairs. A: B, or A: B C D
+        \\      --int  - treats the dependency node pair as numbers.
+        \\      --max_range N  - gives max numeric range for the numeric node value.
+        \\      --verbose  - prints processing messages.
+        \\
+        , .{program_name});
+}
 
 const CmdArgs = struct {
+    const Self = @This();
+
     arg_itr:        ArgIterator,
     program:        []const u8,
     data_file:      []const u8,         // the dependency data file.
@@ -177,24 +202,28 @@ const CmdArgs = struct {
         };
         var argv = args.arg_itr;
         args.program = argv.next() orelse "";
+        return args;
+    }
+
+    fn parse(self: *Self) !void {
+        var argv = self.arg_itr;
         while (argv.next())|argz| {
             const arg = std.mem.sliceTo(argz, 0);
             if (std.mem.eql(u8, arg, "--data")) {
-                args.data_file = std.mem.sliceTo(argv.next(), 0) orelse "data.txt";
+                self.data_file = std.mem.sliceTo(argv.next(), 0) orelse "data.txt";
             } else if (std.mem.eql(u8, arg, "--int")) {
-                args.is_int = true;
+                self.is_int = true;
             } else if (std.mem.eql(u8, arg, "--max-range")) {
                 if (std.mem.sliceTo(argv.next(), 0)) |range| {
-                    args.max_range = try std.fmt.parseInt(usize, range, 10);
-                    args.is_int = true; // setting the max numeric range is automatically an integer item.
+                    self.max_range = try std.fmt.parseInt(usize, range, 10);
+                    self.is_int = true; // setting the max numeric range is automatically an integer node.
                 } else {
                     return error.MissingRangeValue;
                 }
             } else if (std.mem.eql(u8, arg, "--verbose")) {
-                args.is_verbose = true;
+                self.is_verbose = true;
             }
         }
-        return args;
     }
 
     fn deinit(self: *CmdArgs) void {

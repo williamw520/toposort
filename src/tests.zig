@@ -27,10 +27,10 @@ pub fn benchmark1() !void {
         var tsort = try TopoSort(T).init(allocator, .{});
         defer tsort.deinit();
 
-        // Note: add_dependency takes so long is probably because adding item to hashmap.
+        // Note: add takes so long is probably because adding item to hashmap.
         const start_ns1 = nanoTimestamp();
         for (0..N-1) |idx| {
-            try tsort.add_dependency(list.items[idx], list.items[idx+1]);
+            try tsort.add(list.items[idx], list.items[idx+1]);
         }
         (Timing { .n = N, .start_ns = start_ns1, .end_ns = nanoTimestamp() }).print("Add dependency");
 
@@ -58,10 +58,10 @@ pub fn benchmark2() !void {
         const start_ns1 = nanoTimestamp();
         for (0..N/4-1) |idx| {
             const i = idx * 4;
-            try tsort.add_dependency(list.items[i], list.items[i+1]);
-            try tsort.add_dependency(list.items[i], list.items[i+2]);
-            try tsort.add_dependency(list.items[i], list.items[i+3]);
-            try tsort.add_dependency(list.items[i], list.items[i+4]);   // chain to next set.
+            try tsort.add(list.items[i], list.items[i+1]);
+            try tsort.add(list.items[i], list.items[i+2]);
+            try tsort.add(list.items[i], list.items[i+3]);
+            try tsort.add(list.items[i], list.items[i+4]);   // chain to next set.
         }
         (Timing { .n = N, .start_ns = start_ns1, .end_ns = nanoTimestamp() }).print("Add dependency");
 
@@ -89,16 +89,16 @@ pub fn benchmark3() !void {
         const start_ns1 = nanoTimestamp();
         for (0..N/10-1) |idx| {
             const i = idx * 10;
-            try tsort.add_dependency(list.items[i], list.items[i+1]);
-            try tsort.add_dependency(list.items[i], list.items[i+2]);
-            try tsort.add_dependency(list.items[i], list.items[i+3]);
-            try tsort.add_dependency(list.items[i], list.items[i+4]);
-            try tsort.add_dependency(list.items[i], list.items[i+5]);
-            try tsort.add_dependency(list.items[i], list.items[i+6]);
-            try tsort.add_dependency(list.items[i], list.items[i+7]);
-            try tsort.add_dependency(list.items[i], list.items[i+8]);
-            try tsort.add_dependency(list.items[i], list.items[i+9]);
-            try tsort.add_dependency(list.items[i], list.items[i+10]);  // chain to next set.
+            try tsort.add(list.items[i], list.items[i+1]);
+            try tsort.add(list.items[i], list.items[i+2]);
+            try tsort.add(list.items[i], list.items[i+3]);
+            try tsort.add(list.items[i], list.items[i+4]);
+            try tsort.add(list.items[i], list.items[i+5]);
+            try tsort.add(list.items[i], list.items[i+6]);
+            try tsort.add(list.items[i], list.items[i+7]);
+            try tsort.add(list.items[i], list.items[i+8]);
+            try tsort.add(list.items[i], list.items[i+9]);
+            try tsort.add(list.items[i], list.items[i+10]);  // chain to next set.
         }
         (Timing { .n = N, .start_ns = start_ns1, .end_ns = nanoTimestamp() }).print("Add dependency");
 
@@ -126,16 +126,16 @@ pub fn benchmark4() !void {
         const start_ns1 = nanoTimestamp();
         for (0..N/10-1) |idx| {
             const i = idx * 10;
-            try tsort.add_dependency(list.items[i], list.items[i+1]);
-            try tsort.add_dependency(list.items[i], list.items[i+2]);
-            try tsort.add_dependency(list.items[i], list.items[i+3]);
-            try tsort.add_dependency(list.items[i], list.items[i+4]);
-            try tsort.add_dependency(list.items[i], list.items[i+5]);
-            try tsort.add_dependency(list.items[i], list.items[i+6]);
-            try tsort.add_dependency(list.items[i], list.items[i+7]);
-            try tsort.add_dependency(list.items[i], list.items[i+8]);
-            try tsort.add_dependency(list.items[i], list.items[i+9]);
-            try tsort.add_dependency(list.items[i], list.items[i+10]);  // chain to next set.
+            try tsort.add(list.items[i], list.items[i+1]);
+            try tsort.add(list.items[i], list.items[i+2]);
+            try tsort.add(list.items[i], list.items[i+3]);
+            try tsort.add(list.items[i], list.items[i+4]);
+            try tsort.add(list.items[i], list.items[i+5]);
+            try tsort.add(list.items[i], list.items[i+6]);
+            try tsort.add(list.items[i], list.items[i+7]);
+            try tsort.add(list.items[i], list.items[i+8]);
+            try tsort.add(list.items[i], list.items[i+9]);
+            try tsort.add(list.items[i], list.items[i+10]);  // chain to next set.
         }
         (Timing { .n = N, .start_ns = start_ns1, .end_ns = nanoTimestamp() }).print("Add dependency");
 
