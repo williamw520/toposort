@@ -136,13 +136,13 @@ fn dump_nodes(comptime T: type, result: SortResult(T)) void {
 
 fn dump_cycle(comptime T: type, result: SortResult(T)) void {
     std.debug.print("  Cycle: [ ", .{});
-    for (result.get_cycle().items) |id| dump_node_by_id(T, result, id);
+    for (result.get_cycle_set().items) |id| dump_node_by_id(T, result, id);
     std.debug.print("]\n", .{});
 }
 
 fn dump_dep_tree(comptime T: type, result: SortResult(T)) void {
     std.debug.print("  Dependency tree:\n", .{});
-    dump_tree(T, result, null, result.get_root_set_id(), 2);
+    dump_tree(T, result, null, result.get_root_set(), 2);
 }
 
 fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32,

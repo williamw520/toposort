@@ -52,6 +52,7 @@ Update your `build.zig` with the lines for toposort.
 
   ```diff
     pub fn build(b: *std.Build) void {
+        ...
  +     const opts = .{ .target = target, .optimize = optimize };
  +     const toposort_module = b.dependency("toposort", opts).module("toposort");
         ...
@@ -86,7 +87,7 @@ const SortResult = toposort.SortResult;
     var tsort = try TopoSort(T).init(allocator, .{});
     defer tsort.deinit();
 ```
-The data type of the node value is specified as a comptime type to TopoSort(T).
+The data type of the node value is provided as a comptime type to TopoSort(T).
 
 #### Adding dependency data.
 ```zig
@@ -103,14 +104,14 @@ The data type of the node value is specified as a comptime type to TopoSort(T).
 #### Checking for cycles
 ```zig
     if (result.has_cycle()) {
-        for (result.get_cycle().items) |id| {
-            const cyclical_node = result.get_node(id);
+        for (result.get_cycle_set().items) |id| {
+            const cyclic_node = result.get_node(id);
             ...
         }
     }
 ```
 
-#### Otherwise, process the sorted non-cyclical result
+#### Otherwise, process the sorted non-cyclic result
 ```zig
     const sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sets.items) |subset| {     // the node sets are in topological order
@@ -174,13 +175,14 @@ Add the dependent node B to a list of leading nodes - B: E F G
     var tsort = try TopoSort(T).init(allocator, .{});
     try tsort.add_dep("A", "B");    // A: B
     try tsort.add_dep("B", "C");    // B: C
+    try tsort.add_dep("B", "D");    // B: D
     try tsort.add_deps("B", &[_]T{ "E", "F", "G" });    // B: E F G
     
     var nodes = ArrayList(T).init(allocator);
     try nodes.append("E");
     try nodes.append("F");
     try nodes.append("G");
-    try tsort.add_deps(10, nodes.items);
+    try tsort.add_deps("B", nodes.items);
 ```
 
 #### To traverse the list of nodes in the graph,
@@ -192,9 +194,10 @@ Add the dependent node B to a list of leading nodes - B: E F G
 
 #### To traverse the dependency graph recursively,
 ```zig
-    const SortResult = toposort.SortResult;
     const T = u32;  // node data type
-    visit_tree(result, null, result.get_root_set_id());
+    var tsort = try TopoSort(T).init(allocator, .{});
+    ...
+    visit_tree(result, null, result.get_root_set());
 
     fn visit_tree(result: SortResult(T), lead_id: ?u32, dependent_ids: ArrayList(u32)) {
         if (lead_id) |id| {

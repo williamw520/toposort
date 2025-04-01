@@ -46,7 +46,7 @@ pub fn TopoSort(comptime T: type) type {
             const lead_id   = if (leading) |lead| try self.data.add_node(lead) else null;
             const dep_pair  = Dependency { .lead_id = lead_id, .dep_id = dep_id };
             try self.data.dependencies.append(dep_pair);
-            if (self.data.verbose) try self.dump_dependency(leading, dependent);
+            if (self.data.verbose) try self.print_dependency(leading, dependent);
         }
 
         /// Add a dependency where the dependent node depends on the leading node,
@@ -65,59 +65,62 @@ pub fn TopoSort(comptime T: type) type {
 
         /// Perform the topological sort.
         pub fn sort(self: *Self) !SortResult(T) {
-            // set up the node to dependents mapping, before setting up incomings.
+            // set up the leads to dependents mapping, before setting up incomings.
             try self.setup_dependents();
-            if (self.data.verbose) self.dump_dependents();
+            if (self.data.verbose) self.print_dependents();
 
             // counts of incoming leading links to each node.
             const incomings: []u32 = try self.allocator.alloc(u32, self.data.node_count());
             defer self.allocator.free(incomings);
             try self.setup_incomings(incomings);
 
-            // track whether a node has been sorted.
+            // track whether a node has been visited; also for finding cycles.
             const visited: []bool = try self.allocator.alloc(bool, self.data.node_count());
             defer self.allocator.free(visited);
             @memset(visited, false);
             
             if (self.data.verbose) {
-                try self.dump_nodes();
-                try self.dump_incomings(incomings);
+                try self.print_nodes();
+                try self.print_incomings(incomings);    // print the before counts.
             }
 
             try self.run_alogrithm(incomings, visited);
 
             if (self.data.verbose) {
-                try self.dump_incomings(incomings);
-                try self.dump_visited(visited);
-                try self.dump_sorted();
-                try self.dump_cycle();
+                try self.print_incomings(incomings);    // print the after counts.
+                try self.print_visited(visited);
+                try self.print_sorted();
+                try self.print_cycle();
             }
+
             return SortResult(T).init(self.data);
         }
 
+        // This is a variant to the Kahn's algorithm, with additions on
+        // finding dependence-free subsets and finding the cyclic nodes.
         fn run_alogrithm(self: *Self, incomings: []u32, visited: []bool) !void {
-            // nodes that have no incoming leading links, i.e. they are not dependents.
+            // Nodes that have no incoming leading links, i.e. they are non-dependents.
             var curr_zeros = ArrayList(u32).init(self.allocator);
             var next_zeros = ArrayList(u32).init(self.allocator);
             defer curr_zeros.deinit();
             defer next_zeros.deinit();
 
             try scan_zero_incoming(incomings, &curr_zeros); // find the initial set.
-            try self.add_root_set(curr_zeros);
+            try self.save_root_set(curr_zeros);
             while (curr_zeros.items.len > 0) {
                 try self.add_sorted_set(curr_zeros);        // emit non-dependent items.
-                next_zeros.clearRetainingCapacity();        // reset array for the next round.
                 for (curr_zeros.items) |zero_id| {
                     visited[zero_id] = true;
                     for (self.data.dependents[zero_id].items) |dep_id| {
-                        if (visited[dep_id]) continue;
+                        if (visited[dep_id]) continue;      // cycle encountered, skip.
                         incomings[dep_id] -= 1;
                         if (incomings[dep_id] == 0) try next_zeros.append(dep_id);
                     }
                 }
                 std.mem.swap(ArrayList(u32), &curr_zeros, &next_zeros);
+                next_zeros.clearRetainingCapacity();        // reset array for the next round.
             }
-            try self.collect_cycled_nodes(visited);
+            try self.collect_cyclic_nodes(visited);
         }
 
         fn setup_dependents(self: *Self) !void {
@@ -135,8 +138,8 @@ pub fn TopoSort(comptime T: type) type {
 
         fn setup_incomings(self: *Self, incomings: []u32) !void {
             @memset(incomings, 0);
-            for (self.data.dependents) |list| { // each node leads a list of dependents.
-                for (list.items) |dep_id| {     // all dep_id have one incoming from the leading node.
+            for (self.data.dependents) |deps| { // each node leads a list of dependents.
+                for (deps.items) |dep_id| {     // each dep_id has one incoming from the leading node.
                     incomings[dep_id] += 1;
                 }
             }
@@ -150,7 +153,7 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn add_root_set(self: *Self, root_zeros: ArrayList(u32)) !void {
+        fn save_root_set(self: *Self, root_zeros: ArrayList(u32)) !void {
             self.data.root_set_id.clearRetainingCapacity();
             try self.data.root_set_id.appendSlice(root_zeros.items);
         }
@@ -163,7 +166,7 @@ pub fn TopoSort(comptime T: type) type {
             try self.data.sorted_sets.append(sorted_set);
         }
 
-        fn collect_cycled_nodes(self: *Self, visited: []bool) !void {
+        fn collect_cyclic_nodes(self: *Self, visited: []bool) !void {
             self.data.cycle.clearRetainingCapacity();
             for (visited, 0..) |flag, id| {
                 if (!flag) {
@@ -172,7 +175,7 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn dump_dependency(self: Self, leading: ?T, dependent: T) !void {
+        fn print_dependency(self: Self, leading: ?T, dependent: T) !void {
             const depend_id     = self.data.get_id(dependent);
             const depend_txt    = try as_alloc_str(T, dependent, self.allocator);
             defer self.allocator.free(depend_txt);
@@ -187,7 +190,7 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn dump_dependents(self: Self) void {
+        fn print_dependents(self: Self) void {
             std.debug.print("  dependents: [", .{});
             for (self.data.dependents) |list| {
                 std.debug.print(" {any} ", .{list.items});
@@ -195,7 +198,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print(" ]\n", .{});
         }
 
-        fn dump_nodes(self: Self) !void {
+        fn print_nodes(self: Self) !void {
             std.debug.print("  nodes: [ ", .{});
             for (self.data.unique_nodes.items, 0..) |node, id| {
                 const txt = try as_alloc_str(T, node, self.allocator);
@@ -205,7 +208,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_visited(self: Self, visited: []bool) !void {
+        fn print_visited(self: Self, visited: []bool) !void {
             std.debug.print("  visited: [ ", .{});
             for (visited, 0..) |flag, id| {
                 const txt = try as_alloc_str(T, self.data.get_node(id), self.allocator);
@@ -215,7 +218,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_incomings(self: Self, incomings: []u32) !void {
+        fn print_incomings(self: Self, incomings: []u32) !void {
             std.debug.print("  incomings: [ ", .{});
             for (incomings, 0..) |count, id| {
                 const txt = try as_alloc_str(T, self.data.get_node(id), self.allocator);
@@ -225,7 +228,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn dump_sorted(self: Self) !void {
+        fn print_sorted(self: Self) !void {
             std.debug.print("  sorted [", .{});
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
@@ -241,7 +244,7 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print(" ]\n", .{});
         }
 
-        fn dump_cycle(self: Self) !void {
+        fn print_cycle(self: Self) !void {
             std.debug.print("  cycle: [ ", .{});
             for (self.data.cycle.items) |id| {
                 const node = self.data.get_node(id);
@@ -257,7 +260,7 @@ pub fn TopoSort(comptime T: type) type {
 }
 
 
-/// This is returned by TopoSort.resolve().  Cannot be created by itself.
+/// This is the result returned by TopoSort.sort().  Cannot be created by itself.
 /// This has the same lifetime as TopoSort.
 pub fn SortResult(comptime T: type) type {
     return struct {
@@ -266,45 +269,54 @@ pub fn SortResult(comptime T: type) type {
         data:   *Data(T),
 
         fn init(data: *Data(T)) Self {
-            return .{
-                .data = data,
-            };
+            return .{ .data = data };
         }
 
+        /// Return the topologically sorted sets of nodes.
         pub fn get_sorted_sets(self: Self) ArrayList(ArrayList(T)) {
             return self.data.sorted_sets;
         }
 
-        pub fn get_cycle(self: Self) ArrayList(u32) {
-            return self.data.cycle;
-        }
-
+        /// Report whether the graph has cycle(s).
         pub fn has_cycle(self: Self) bool {
             return self.data.cycle.items.len > 0;
         }
 
-        pub fn get_root_set_id(self: Self) ArrayList(u32) {
+        /// Return the set of cyclic node id.  Use get_node() to get node value from id.
+        pub fn get_cycle_set(self: Self) ArrayList(u32) {
+            return self.data.cycle;
+        }
+
+        /// Return the set of root node id that depend on no other nodes.
+        /// These are the root nodes to traverse the whole graph.
+        /// Use get_node() to get node value from id.
+        pub fn get_root_set(self: Self) ArrayList(u32) {
             return self.data.root_set_id;
         }
 
+        /// Return the count of nodes in the graph.
         pub fn node_count(self: Self) usize {
             return self.data.node_count();
         }
 
+        /// Return the list of nodes in the graph.
         pub fn get_nodes(self: Self) ArrayList(T) {
             return self.data.unique_nodes;
         }
 
+        /// Get the node by the id, where id is an internally generated id.
         pub fn get_node(self: Self, id: usize) T {
             return self.data.get_node(id);
         }
 
+        /// Get the id by the node, where id is an internally generated id.
         pub fn get_id(self: Self, node: T) ?u32 {
             return self.data.get_id(node);
         }
 
-        pub fn get_dependents(self: Self, id: u32) ArrayList(u32) {
-            return self.data.dependents[id];
+        /// Get the list of dependent node id of the leading node id.
+        pub fn get_dependents(self: Self, leading_id: u32) ArrayList(u32) {
+            return self.data.dependents[leading_id];
         }
 
     };
@@ -313,7 +325,7 @@ pub fn SortResult(comptime T: type) type {
 
 // Define a dependency between a leading node and a depending node.
 const Dependency = struct {
-    lead_id:    ?u32,   // optional for depending node with no dependency.
+    lead_id:    ?u32,   // optional for a node that depends on no one.
     dep_id:     u32,    // the depending node
 };
 
@@ -336,7 +348,7 @@ fn Data(comptime T: type) type {
         dependents:     []ArrayList(u32),           // map node id to its dependent ids. [[2, 3], [], [4]]
         sorted_sets:    ArrayList(ArrayList(T)),    // node sets in order; nodes in each set are parallel.
         cycle:          ArrayList(u32),             // the node ids forming cycles.
-        root_set_id:    ArrayList(u32),             // the root nodes that depend on none.
+        root_set_id:    ArrayList(u32),             // the root node ids that depend on no one.
         verbose:        bool = false,
 
         fn init_obj(self: *Self, allocator: Allocator, max_range: ?usize, verbose: bool) !void {
@@ -395,7 +407,7 @@ fn Data(comptime T: type) type {
         }
 
         fn get_id(self: *Self, node: T) ?u32 {
-            // Mapping a node to its id depends on whether the node type is simple integer
+            // Mapping a node to its id depends on whether the node type is simple integer type.
             // and max_range for the numeric node has been set.
             if (@typeInfo(T) == .int and self.max_range != null) {
                 // Direct mapping using a numeric array is faster than using a hashmap.

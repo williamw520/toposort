@@ -174,7 +174,7 @@ const Timing = struct {
     fn nps(self: Timing) i128 { return @divTrunc(self.n * Timing.NS_TO_MS * 1000, self.elapsed_ns()); }
     fn ns_per_item(self: Timing) i128 { return @divTrunc(self.elapsed_ns(), self.n); }
     fn print(self: Timing, title: []const u8) void {
-        std.debug.print("{s:16} {} pairs. Time: {}ms, {} N/s, {} ns/item\n",
+        std.debug.print("{s:16} {} items. Time: {}ms, {} items/s, {} ns/item\n",
                         .{title, self.n, self.elapsed_ms(), self.nps(), self.ns_per_item() });
     }
 
