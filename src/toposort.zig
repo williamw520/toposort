@@ -32,13 +32,13 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         /// Add the leading node and the dependent node pair.
-        /// Nodes are stored by value.  The memory for nodes are not duplicated.
-        /// For slice and pointer type nodes, memory is managed by the caller.
+        /// Nodes are stored by value. For slice and pointer type nodes,
+        /// the memory for nodes are not duplicated. Memory is managed by caller.
         pub fn add(self: *Self, leading: ?T, dependent: T) !void {
             const dep_id    = try self.data.add_node(dependent);
             const lead_id   = if (leading) |lead| try self.data.add_node(lead) else null;
-            const dep       = Dependency { .lead_id = lead_id, .dep_id = dep_id };
-            try self.data.dependencies.append(dep);
+            const dep_pair  = Dependency { .lead_id = lead_id, .dep_id = dep_id };
+            try self.data.dependencies.append(dep_pair);
             if (self.data.verbose) try self.dump_dependency(leading, dependent);
         }
 
@@ -67,7 +67,7 @@ pub fn TopoSort(comptime T: type) type {
             defer self.allocator.free(incomings);
             try self.setup_incomings(incomings);
 
-            // track whether a node has been resolveed.
+            // track whether a node has been sorted.
             const visited: []bool = try self.allocator.alloc(bool, self.data.node_count());
             defer self.allocator.free(visited);
             @memset(visited, false);
