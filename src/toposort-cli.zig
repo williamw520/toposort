@@ -84,7 +84,7 @@ fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
         std.debug.print("Processing succeeded.\n", .{});
         dump_ordered(T, result);
         dump_nodes(T, result);
-        // dump_dep_tree(T, result);
+        dump_dep_tree(T, result);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
         dump_ordered(T, result);
@@ -147,12 +147,14 @@ fn dump_dep_tree(comptime T: type, result: SortResult(T)) void {
 
 fn dump_tree(comptime T: type, result: SortResult(T), lead_id: ?u32,
              node_ids: ArrayList(u32), indent: usize) void {
-    if (node_ids.items.len == 0)
-        return;
     std.debug.print("{s: <[width]}", .{.value = "", .width = indent});
     if (lead_id) |id| {
         dump_node_by_id(T, result, id);
         std.debug.print("-> ", .{});
+    }
+    if (node_ids.items.len == 0) {
+        std.debug.print("\n", .{});
+        return;
     }
     std.debug.print("[ ", .{});
     for (node_ids.items) |node_id| {
