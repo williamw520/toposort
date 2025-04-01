@@ -163,7 +163,8 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
 
 #### To use a slice/string for the node type,
 ```
-    var tsort = try TopoSort([]const u8).init(allocator, .{});
+    const T = []const u8;
+    var tsort = try TopoSort(T).init(allocator, .{});
 ```
 
 #### To get a list of topologically sorted nodes.
