@@ -25,7 +25,7 @@ TopoSort is a highly efficient Zig library for performing topological sort on de
 Go to the [Releases](https://github.com/williamw520/toposort/releases) page.
 Pick a release to add to your project.
 Identify the file asset URL for the release version. 
-E.g. https://github.com/williamw520/toposort/archive/refs/tags/1.0.1.tar.gz
+E.g. https://github.com/williamw520/toposort/archive/refs/tags/1.0.2.tar.gz
 
 Use `zig fetch` to add the TopoSort package to your Zig project. 
 Run the following command to fetch the TopoSort package:
