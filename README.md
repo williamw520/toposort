@@ -22,14 +22,14 @@ Toposort is a highly efficient Zig library for performing topological sort on de
 
 ## Installation  
 
-1. Go to the [Releases](https://github.com/williamw520/toposort/releases) page.
+Go to the [Releases](https://github.com/williamw520/toposort/releases) page.
 Pick a release to add to your project.
 Identify the file asset URL for the release version.  E.g. https://github.com/williamw520/toposort/archive/refs/tags/1.0.tar.gz
 
-2. Use `zig fetch` to add the Toposort package to your Zig project. 
+Use `zig fetch` to add the Toposort package to your Zig project. 
 Run the following command to fetch the Toposort package:
 ```shell
-zig fetch https://github.com/williamw520/toposort/archive/refs/tags/<VERSION>.tar.gz --save
+  zig fetch https://github.com/williamw520/toposort/archive/refs/tags/<VERSION>.tar.gz --save
 ```
 
 `zig fetch` updates your `build.zig.zon` file with the URL with file hash added in the .dependency section of the file.
@@ -47,7 +47,7 @@ zig fetch https://github.com/williamw520/toposort/archive/refs/tags/<VERSION>.ta
    }
    ```
 
-3. Update your `build.zig` with the lines for toposort.
+Update your `build.zig` with the lines for toposort.
 
   ```diff
     pub fn build(b: *std.Build) void {
@@ -72,33 +72,33 @@ The `.addImport("toposort")` call let you import the module into your Zig source
 
 Usage typically follows the following steps in your Zig source file.  
 
-1. Import
+#### Import
 ```zig
 const toposort = @import("toposort");
 const TopoSort = toposort.TopoSort;
 const SortResult = toposort.SortResult;
 ```
 
-2. Initialization and memory management.
+#### Initialization and memory management.
 ```zig
     const T = u32;  // node data type
     var tsort = try TopoSort(T).init(allocator, .{});
     defer tsort.deinit();
 ```
 
-3. Add dependency data.
+#### Add dependency data.
 ```zig
     try tsort.add(101, 102);    // node 102 depends on the leading node 101
     try tsort.add(102, 103);
     try tsort.add(101, 104);
 ```
 
-4. Perform the topological sort
+#### Perform the topological sort
 ```zig
     const result = try tsort.sort();
 ```
 
-5. Check for cycles
+#### Check for cycles
 ```zig
     if (result.has_cycle()) {
         for (result.get_cycle().items) |id| {
@@ -108,7 +108,7 @@ const SortResult = toposort.SortResult;
     }
 ```
 
-6. Otherwise, process the sorted result for a non-cyclical graph.
+#### Otherwise, process the sorted non-cyclical result
 ```zig
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |subset| { // the node sets are in topological order
@@ -158,20 +158,20 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
 
 ### Other Usage
 
-1. To use a slice/string for the node type,
+#### To use a slice/string for the node type,
 ```
     const T = []const u8;   // node data type
     var tsort = try TopoSort(T).init(allocator, .{});
 ```
 
-2. To traverse the list of nodes in the graph,
+#### To traverse the list of nodes in the graph,
 ```zig
     for (result.get_nodes().items) |node| {
         ...
     }
 ```
 
-3. To traverse the dependency graph recursively,
+#### To traverse the dependency graph recursively,
 ```zig
     const SortResult = toposort.SortResult;
     const T = u32;  // node data type
