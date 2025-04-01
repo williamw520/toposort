@@ -166,6 +166,16 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
     var tsort = try TopoSort([]const u8).init(allocator, .{});
 ```
 
+#### To get a list of topologically sorted nodes.
+```
+    const T = []const u8;
+    var list = ArrayList(T).init(allocator);    // list to hold the returned nodes.
+    defer list.deinit();
+    for ((try result.get_sorted_list(&list)).items) |node| {
+        ...
+    }
+```
+
 #### To add dependency similar to the makefile rule format.
 Add the dependent node A to the leading node B - A: B  
 Add the dependent node B to the leading node C - B: C  

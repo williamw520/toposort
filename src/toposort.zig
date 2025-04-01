@@ -277,6 +277,15 @@ pub fn SortResult(comptime T: type) type {
             return self.data.sorted_sets;
         }
 
+        /// Copy the topologically nodes into the ArrayList provided by caller.
+        /// Return the caller provided list.
+        pub fn get_sorted_list(self: Self, list: *ArrayList(T)) !*ArrayList(T) {
+            for (self.get_sorted_sets().items) |set| {
+                for (set.items) |node| try list.append(node);
+            }
+            return list;
+        }
+
         /// Report whether the graph has cycle(s).
         pub fn has_cycle(self: Self) bool {
             return self.data.cycle.items.len > 0;

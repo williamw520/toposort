@@ -82,12 +82,12 @@ fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
     // Print the result.
     if (!result.has_cycle()) {
         std.debug.print("Processing succeeded.\n", .{});
-        dump_ordered(T, result);
+        try dump_ordered(T, result);
         dump_nodes(T, result);
         dump_dep_tree(T, result);
     } else {
         std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
-        dump_ordered(T, result);
+        try dump_ordered(T, result);
         dump_nodes(T, result);
         dump_cycle(T, result);
         // dump_dep_tree(T, result);
@@ -117,8 +117,8 @@ fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
     }
 }
 
-fn dump_ordered(comptime T: type, result: SortResult(T)) void {
-    std.debug.print("  Topologically sorted: [", .{});
+fn dump_ordered(comptime T: type, result: SortResult(T)) !void {
+    std.debug.print("  Topologically sorted sets: [", .{});
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |set| {
         std.debug.print(" {{ ", .{});
@@ -126,6 +126,14 @@ fn dump_ordered(comptime T: type, result: SortResult(T)) void {
         std.debug.print("}} ", .{});
     }
     std.debug.print(" ]\n", .{});
+
+    var sorted_list = ArrayList(T).init(g_allocator);
+    defer sorted_list.deinit();
+    std.debug.print("  Topologically sorted list: [ ", .{});
+    for ((try result.get_sorted_list(&sorted_list)).items) |node| {
+        dump_node(T, node);
+    }
+    std.debug.print("]\n", .{});
 }
 
 fn dump_nodes(comptime T: type, result: SortResult(T)) void {
