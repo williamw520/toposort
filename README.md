@@ -15,7 +15,7 @@ TopoSort is a highly efficient Zig library for performing topological sort on de
 * [Usage](#usage)
   * [Memory Ownership](#memory-ownership)
   * [Configuration](#configuration)
-  * [Other Usage](#other-usage)
+  * [More Usage](#more-usage)
 * [CLI Tool](#command-line-tool)
 * [Benchmarks](#benchmarks)
 * [License](#license)
@@ -83,7 +83,7 @@ const SortResult = toposort.SortResult;
 
 #### Initialization and memory management.
 ```zig
-    const T = u32;  // node data type
+    const T = usize;  // node data type
     var tsort = try TopoSort(T).init(allocator, .{});
     defer tsort.deinit();
 ```
@@ -121,13 +121,13 @@ The data type of the node value is provided as a comptime type to TopoSort(T).
     }
 ```
 
-TopoSort figures out the nodes that have no dependency with each other
-in the linear order of the topological sequence, and groups them together as subsets.
+TopoSort figures out the nodes that have no dependence with each other
+in the linear order of the topological sequence and groups them together as subsets.
 This allows you to run/process the nodes of each subset in parallel.
 
 The subsets themselves are in topological order. If there's no need for 
 parallel processing, the nodes in each subset can be processed sequentially,
-which fit in the overall topological order of all nodes.
+which fit in the overall topological order of all the nodes.
 
 
 ### Memory Ownership
@@ -142,7 +142,7 @@ are not duplicated. Memory is owned and managed by the caller.
 
 The `Toposort.init()` function takes in optional configurations. E.g.
 ```zig
-    const T = u32;  // node data type
+    const T = usize;  // node data type
     var tsort = try TopoSort(T).init(allocator, .{
         verbose = true,
         max_range = 4000,
@@ -159,7 +159,7 @@ faster performance.  Building a dependency tree can be more than 3X or 4X faster
 Compare the 3rd benchmark and 4th benchmark in tests.zig.
 
 
-### Other Usage
+### More Usage
 
 #### To use a slice/string for the node type,
 ```
@@ -176,10 +176,10 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
     }
 ```
 
-#### To add dependency similar to the makefile rule format.
-Add the dependent node A to the leading node B - A: B  
-Add the dependent node B to the leading node C - B: C  
-Add the dependent node B to a list of leading nodes - B: E F G  
+#### To add dependency similar to the Makefile rule format.
+Add the dependent node A to the leading B node.  A: B  
+Add the dependent node B to the leading C node.  B: C  
+Add the dependent node B to a list of leading nodes.  B: E F G  
 ```
     const T = []const u8;
     var tsort = try TopoSort(T).init(allocator, .{});
@@ -204,13 +204,14 @@ Add the dependent node B to a list of leading nodes - B: E F G
 
 #### To traverse the dependency graph recursively,
 ```zig
-    const T = u32;  // node data type
+    const T = usize;  // node data type
     var tsort = try TopoSort(T).init(allocator, .{});
     ...
+    const result = try tsort.sort();
     visit_tree(result, null, result.get_root_set());
 
     fn visit_tree(result: SortResult(T), lead_id: ?u32, dependent_ids: ArrayList(u32)) {
-        if (lead_id) |id| {
+        if (lead_id) |id| { // lead_id is optional since the root nodes have no leading nodes.
             const lead_node = result.get_node(lead_id);
             ...
         }
@@ -224,16 +225,16 @@ Add the dependent node B to a list of leading nodes - B: E F G
 
 ## Command Line Tool
 
-TopoSort comes with a command line interace (CLI) tool - toposort-cli, 
+TopoSort comes with a command line interface (CLI) tool `toposort-cli`, 
 which uses the TopoSort library internally.  The data file it used follows
-the simple dependent rule specification of Makefile. E.g. 
+the simple dependent rule format of Makefile. E.g. 
 ```
   A: B
   B: C D
   C: E F G
 ```
 
-Sample invocations:
+Sample invocations on the test data:
 
 ```
   zig-out/bin/toposort-cli --data data/data.txt
