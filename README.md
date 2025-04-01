@@ -213,7 +213,7 @@ Add the dependent node B to a list of leading nodes.  B: E F G
 
     fn visit_tree(result: SortResult(T), lead_id: ?u32, dependent_ids: ArrayList(u32)) {
         if (lead_id) |id| { // lead_id is optional since the root nodes have no leading nodes.
-            const lead_node = result.get_node(lead_id);
+            const lead_node = result.get_node(id);
             ...
         }
         for (dependent_ids.items) |node_id| {
