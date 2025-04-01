@@ -57,7 +57,7 @@ pub fn TopoSort(comptime T: type) type {
 
         /// Add dependencies where the dependent node depends on a number of leading nodes,
         /// similar to the makefile rule - A: B C D
-        pub fn add_deps(self: *Self, dependent: T, leadings: ArrayList(T)) !void {
+        pub fn add_deps(self: *Self, dependent: T, leadings: []const T) !void {
             for (leadings) |leading| {
                 try self.add(leading, dependent);
             }
