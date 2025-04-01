@@ -85,6 +85,7 @@ const SortResult = toposort.SortResult;
     var tsort = try TopoSort(T).init(allocator, .{});
     defer tsort.deinit();
 ```
+The data type of the node value is specified as a comptime type to TopoSort(T).
 
 #### Add dependency data.
 ```zig
@@ -112,7 +113,7 @@ const SortResult = toposort.SortResult;
 ```zig
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |subset| { // the node sets are in topological order
-        for (subset.items) |node| {    // nodes within each set are dependency free within the set.
+        for (subset.items) |node| {    // nodes within each set are dependence free from each other.
             ...
         }
     }
@@ -123,7 +124,7 @@ in the linear order of the topological sequence, and groups them together as sub
 This allows you to run/process the nodes of each subset in parallel.
 
 The subsets themselves are in topological order. If there's no need for 
-parallel processing on the nodes, the nodes in each subset can be processed sequentially,
+parallel processing, the nodes in each subset can be processed sequentially,
 which fit in the overall topological order of all nodes.
 
 
@@ -149,10 +150,10 @@ Setting the `verbose` flag prints more internal messages.
 
 The `max_range` property sets the maximum value of the node item value.
 E.g. For node values ranging from 1, 2, 3, 20, 75, ... 100, 100 is the
-maximum value. If all your node values are position integers, 
+maximum value. If all your node values are positive integers, 
 passing in a number type (u16, u32, u64, etc) for the node data type and 
 setting the `max_range` let Toposort use a simpler data structure with
-faster performance.  Building the dependency tree can be more than 3X faster. 
+faster performance.  Building a dependency tree can be more than 3X or 4X faster. 
 Compare the 3rd benchmark and 4th benchmark in tests.zig.
 
 
@@ -160,8 +161,7 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
 
 #### To use a slice/string for the node type,
 ```
-    const T = []const u8;   // node data type
-    var tsort = try TopoSort(T).init(allocator, .{});
+    var tsort = try TopoSort([]const u8).init(allocator, .{});
 ```
 
 #### To traverse the list of nodes in the graph,
