@@ -1,3 +1,11 @@
+// Toposort
+// A Zig library for performing topological sort.
+// Copyright (C) 2025 William Wong. All rights reserved.
+// (williamw520@gmail.com)
+//
+// MIT License.  See the LICENSE file.
+//
+
 const std = @import("std");
 const testing = std.testing;
 const Allocator = std.mem.Allocator;

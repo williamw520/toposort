@@ -1,3 +1,10 @@
+// Toposort
+// A Zig library for performing topological sort.
+// Copyright (C) 2025 William Wong. All rights reserved.
+// (williamw520@gmail.com)
+//
+// MIT License.  See the LICENSE file.
+//
 
 const std = @import("std");
 const toposort = @import("toposort");
@@ -15,6 +22,9 @@ const IntNode = usize;
 const MyErrors = error{ MissingRangeValue };
 
 
+/// A command line tool that reads dependency data from file and
+/// does topological sort using the Toposort library.
+/// This serves as an example to exercise the Toposort library API.
 pub fn main() !void {
     {
         var args = try CmdArgs.init(g_allocator);
