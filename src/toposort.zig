@@ -344,7 +344,7 @@ fn Data(comptime T: type) type {
             self.verbose = verbose;
             self.dependencies = ArrayList(Dependency).init(allocator);
             self.node_map = NodeMap.init(allocator);
-            self.node_num_map = try allocator.alloc(?u32, max_range orelse 0);
+            self.node_num_map = try allocator.alloc(?u32, if (max_range)|n| n+1 else 0);
             self.unique_nodes = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
