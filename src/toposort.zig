@@ -82,7 +82,6 @@ pub fn TopoSort(comptime T: type) type {
             if (self.data.verbose) {
                 try self.dump_nodes();
                 try self.dump_incomings(incomings);
-                try self.dump_visited(visited);
             }
 
             try self.run_alogrithm(incomings, visited);

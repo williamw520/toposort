@@ -6,17 +6,24 @@ Toposort is a highly efficient Zig library for performing topological sort on de
 * Performing topological sort on the dependency graph.
 * Generating dependence-free subsets within the topological order.
 * Cycle detection and cycle reporting.
-* Support on different node types.
+* Support different node types.
+
 
 ## Content
 
 * [Installation](#installation)
 * [Usage](#usage)
+  * [Memory Ownership](#memory-ownership)
+  * [Configurations](#configurations)
+  * [Other Usage](#other-usage)
+* [CLI Tool](#command-line-tool)
+* [Benchmarks](#benchmarks)
 * [License](#license)
 
-## Installation
+## Installation  
 
-1. Go to the [Releases](https://github.com/williamw520/toposort/releases) page and pick a release to add to your project.
+1. Go to the [Releases](https://github.com/williamw520/toposort/releases) page.
+Pick a release to add to your project.
 Identify the file asset URL for the release version.  E.g. https://github.com/williamw520/toposort/archive/refs/tags/1.0.tar.gz
 
 2. Use `zig fetch` to add the Toposort package to your Zig project. 
@@ -54,20 +61,22 @@ zig fetch https://github.com/williamw520/toposort/archive/refs/tags/<VERSION>.ta
  +     exe.root_module.addImport("toposort", toposort_module);
 ```
 
-4. The `.addImport("toposort")` call let your import the module into your Zig source files.
+The `.addImport("toposort")` call let you import the module into your Zig source files.
 
 ```zig
     const toposort = @import("toposort");
 ```
 
+
 ## Usage
 
-Using of Toposort typically follows the following steps in your Zig source file.
+Usage typically follows the following steps in your Zig source file.  
 
 1. Import
 ```zig
 const toposort = @import("toposort");
 const TopoSort = toposort.TopoSort;
+const SortResult = toposort.SortResult;
 ```
 
 2. Initialization and memory management.
@@ -99,7 +108,7 @@ const TopoSort = toposort.TopoSort;
     }
 ```
 
-6. Otherwise, process the sorted result for non-cyclical graph.
+6. Otherwise, process the sorted result for a non-cyclical graph.
 ```zig
     const sorted_sets: ArrayList(ArrayList(T)) = result.get_sorted_sets();
     for (sorted_sets.items) |subset| { // the node sets are in topological order
@@ -115,7 +124,15 @@ This allows you to run/process the nodes of each subset in parallel.
 
 The subsets themselves are in topological order. If there's no need for 
 parallel processing on the nodes, the nodes in each subset can be processed sequentially,
-which fit in the overall topological order of all the nodes.
+which fit in the overall topological order of all nodes.
+
+
+### Memory Ownership
+
+Nodes are passed in by value and are stored by value in the Toposort struct.
+For simple type like integer (e.g. u16, u32), the node values are simply copied.
+For slice and pointer node type (e.g. []const u8), the memory for the nodes 
+are not duplicated. Memory is owned and managed by the caller.
 
 
 ### Configurations
@@ -128,15 +145,72 @@ The `Toposort.init()` function takes in options for configuration. E.g.
         max_range = 4000,
     });
 ```
-Setting the `verbose` flag prints more processing messages.
+Setting the `verbose` flag prints more internal messages.
 
 The `max_range` property sets the maximum value of the node item value.
 E.g. For node values ranging from 1, 2, 3, 20, 75, ... 100, 100 is the
 maximum value. If all your node values are position integers, 
 passing in a number type (u16, u32, u64, etc) for the node data type and 
-setting the `max_range` let Toposort use a simplified data structure with
+setting the `max_range` let Toposort use a simpler data structure with
 faster performance.  Building the dependency tree can be more than 3X faster. 
 Compare the 3rd benchmark and 4th benchmark in tests.zig.
+
+
+### Other Usage
+
+1. To use a slice/string for the node type,
+```
+    const T = []const u8;   // node data type
+    var tsort = try TopoSort(T).init(allocator, .{});
+```
+
+2. To traverse the list of nodes in the graph,
+```zig
+    for (result.get_nodes().items) |node| {
+        ...
+    }
+```
+
+3. To traverse the dependency graph recursively,
+```zig
+    const SortResult = toposort.SortResult;
+    const T = u32;  // node data type
+    visit_tree(result, null, result.get_root_set_id());
+
+    fn visit_tree(result: SortResult(T), lead_id: ?u32, dependent_ids: ArrayList(u32)) {
+        if (lead_id) |id| {
+            const lead_node = result.get_node(lead_id);
+            ...
+        }
+        for (dependent_ids.items) |node_id| {
+            const dependent_node = result.get_node(node_id);
+            ...
+            visit_tree(result, node_id, result.get_dependents(node_id));
+        }
+    }
+```
+
+## Command Line Tool
+
+Toposort comes with a command line interace (CLI) tool - toposort-cli, 
+which uses the Toposort library internally.  The data file it used follows
+the simple dependent rule specification of Makefile. E.g. 
+```
+  A: B
+  B: C D
+  C: E F G
+```
+
+Sample invocations:
+
+```
+  zig-out/bin/toposort-cli --data data/data.txt
+  zig-out/bin/toposort-cli --data data/data.txt --verbose
+  zig-out/bin/toposort-cli --data data/data2.txt
+  zig-out/bin/toposort-cli --data data/data_cycle1.txt
+  zig-out/bin/toposort-cli --data data/data_cycle2.txt
+  zig-out/bin/toposort-cli --data data/data_num.txt --int
+```
 
 ## Benchmarks
 
