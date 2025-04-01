@@ -4,7 +4,7 @@ TopoSort is a highly efficient Zig library for performing topological sort on de
 
 * Building dependency graph from dependency data.
 * Performing topological sort on the dependency graph.
-* Generating dependence-free subsets within the topological order.
+* Generating dependence-free subsets for parallel processing.
 * Cycle detection and cycle reporting.
 * Support different node types.
 
