@@ -1,6 +1,6 @@
 .{
     .name = .toposort,
-    .version = "1.0.0",
+    .version = "1.0.1",
     .fingerprint = 0x50e6bc6ccfc571a0,  // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.0-dev.117+1408288b9",
 
@@ -28,8 +28,8 @@
         "src/toposort-cli.zig",
         "src/tests.zig",
         "data",
-        //"LICENSE",
-        //"README.md",
+        "LICENSE",
+        "README.md",
     },
 }
 
