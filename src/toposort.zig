@@ -91,8 +91,9 @@ pub fn TopoSort(comptime T: type) type {
         /// Perform the topological sort.
         pub fn sort(self: *Self) !SortResult(T) {
             // set up the leads to dependents mapping, before setting up incomings.
-            try self.setup_dependents();
+            try self.setup_leaders_dependents();
             if (self.data.verbose) self.print_dependents();
+            if (self.data.verbose) self.print_leaders();
 
             // counts of incoming leading links to each node.
             const incomings: []u32 = try self.allocator.alloc(u32, self.data.node_count());
@@ -148,14 +149,19 @@ pub fn TopoSort(comptime T: type) type {
             try self.collect_cyclic_nodes(visited);
         }
 
-        fn setup_dependents(self: *Self) !void {
-            // re-alloc the dependents array based on the current node count.
+        fn setup_leaders_dependents(self: *Self) !void {
+            // re-alloc the arrays based on the current node count.
             try self.data.realloc_dependents(self.allocator);
+            try self.data.realloc_leaders(self.allocator);
             for (self.data.dependencies.items) |dep| {
                 if (dep.lead_id) |lead_id| {
                     var leads_dependents = &self.data.dependents[lead_id];
                     if (null == indexOfScalar(u32, leads_dependents.items, dep.dep_id)) {
                         try leads_dependents.append(dep.dep_id);
+                    }
+                    var deps_leaders = &self.data.leaders[dep.dep_id];
+                    if (null == indexOfScalar(u32, deps_leaders.items, lead_id)) {
+                        try deps_leaders.append(lead_id);
                     }
                 }
             }
@@ -218,6 +224,14 @@ pub fn TopoSort(comptime T: type) type {
         fn print_dependents(self: Self) void {
             std.debug.print("  dependents: [", .{});
             for (self.data.dependents) |list| {
+                std.debug.print(" {any} ", .{list.items});
+            }
+            std.debug.print(" ]\n", .{});
+        }
+
+        fn print_leaders(self: Self) void {
+            std.debug.print("  leaders: [", .{});
+            for (self.data.leaders) |list| {
                 std.debug.print(" {any} ", .{list.items});
             }
             std.debug.print(" ]\n", .{});
@@ -353,6 +367,11 @@ pub fn SortResult(comptime T: type) type {
             return self.data.dependents[leading_id];
         }
 
+        /// Get the list of leading node id of the dependent node id.
+        pub fn get_leaders(self: Self, dependent_id: u32) ArrayList(u32) {
+            return self.data.leaders[dependent_id];
+        }
+
     };
 }
 
@@ -379,7 +398,8 @@ fn Data(comptime T: type) type {
         node_map:       NodeMap,                    // maps node to sequential id.
         node_num_map:   []?u32,                     // maps numeric node directly to id.
         dependencies:   ArrayList(Dependency),      // the list of dependency pairs.
-        dependents:     []ArrayList(u32),           // map node id to its dependent ids. [[2, 3], [], [4]]
+        dependents:     []ArrayList(u32),           // map node id to its dependent ids. [[1, 2], [], [1]]
+        leaders:        []ArrayList(u32),           // map node id to its leader ids. [[], [0, 2], [0]]
         sorted_sets:    ArrayList(ArrayList(T)),    // node sets in order; nodes in each set are parallel.
         cycle:          ArrayList(u32),             // the node ids forming cycles.
         root_set_id:    ArrayList(u32),             // the root node ids that depend on no one.
@@ -393,6 +413,7 @@ fn Data(comptime T: type) type {
             self.node_num_map = try allocator.alloc(?u32, if (max_range)|n| n+1 else 0);
             self.unique_nodes = ArrayList(T).init(allocator);
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
+            self.leaders = try allocator.alloc(ArrayList(u32), 0);
             self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
             self.cycle = ArrayList(u32).init(allocator);
             self.root_set_id = ArrayList(u32).init(allocator);
@@ -405,23 +426,25 @@ fn Data(comptime T: type) type {
             self.free_sorted_sets();
             self.dependencies.deinit();
             self.free_dependents(allocator);
+            self.free_leaders(allocator);
             self.node_map.deinit();
             allocator.free(self.node_num_map);
             self.unique_nodes.deinit();
         }
 
         fn free_sorted_sets(self: *Self) void {
-            for (self.sorted_sets.items) |list| {
-                list.deinit();
-            }
+            for (self.sorted_sets.items) |list| list.deinit();
             self.sorted_sets.deinit();
         }            
 
         fn free_dependents(self: *Self, allocator: Allocator) void {
-            for (self.dependents) |dep_list| {
-                dep_list.deinit();
-            }
+            for (self.dependents) |dep_list| dep_list.deinit();
             allocator.free(self.dependents);
+        }
+
+        fn free_leaders(self: *Self, allocator: Allocator) void {
+            for (self.leaders) |lead_list| lead_list.deinit();
+            allocator.free(self.leaders);
         }
 
         fn realloc_dependents(self: *Self, allocator: Allocator) !void {
@@ -429,6 +452,14 @@ fn Data(comptime T: type) type {
             self.dependents = try allocator.alloc(ArrayList(u32), self.node_count());
             for (0..self.dependents.len) |i| {
                 self.dependents[i] = ArrayList(u32).init(allocator);
+            }
+        }
+
+        fn realloc_leaders(self: *Self, allocator: Allocator) !void {
+            self.free_leaders(allocator);
+            self.leaders = try allocator.alloc(ArrayList(u32), self.node_count());
+            for (0..self.leaders.len) |i| {
+                self.leaders[i] = ArrayList(u32).init(allocator);
             }
         }
 
