@@ -177,7 +177,7 @@ Compare the 3rd benchmark and 4th benchmark in tests.zig.
     }
 ```
 
-#### To add dependency similar to the Makefile rule format.
+#### To add dependency similar to the Makefile rule format,
 Add the dependent node A to the leading B node.  A: B  
 Add the dependent node B to the leading C node.  B: C  
 Add the dependent node B to a list of leading nodes.  B: E F G  
@@ -195,6 +195,17 @@ Add the dependent node B to a list of leading nodes.  B: E F G
     try nodes.append("G");
     try tsort.add_deps("B", nodes.items);
 ```
+
+#### To add a graph in one shot in text string,
+```
+    var tsort = try TopoSort([]const u8).init(allocator, .{});
+    try tsort.add_graph("(a b) (a c) (d) (c e f g)");
+```
+The format of the graph data is a series of "(dep lead)" rules in a string.
+In the example above, `a` depends on `b`, `a` depends on `c`, `d` depends on none, 
+and `c` depends on `e`, `f`, and `g`.
+
+This can be called multiple times with different parts of the graphs to build the whole thing.
 
 #### To traverse the list of nodes in the graph,
 ```zig
@@ -244,6 +255,12 @@ Sample invocations on the test data:
   zig-out/bin/toposort-cli --data data/data_cycle1.txt
   zig-out/bin/toposort-cli --data data/data_cycle2.txt
   zig-out/bin/toposort-cli --data data/data_num.txt --int
+```
+
+Specify the whole graph in the command line.
+```
+  zig-out/bin/toposort-cli --graph "(a b) (b d) (b c) (c d)"
+  zig-out/bin/toposort-cli --graph "(a b) (a c) (d) (c e f g)"
 ```
 
 ## Benchmarks
