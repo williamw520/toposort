@@ -250,7 +250,7 @@ Sample invocations on the test data:
 
 TopoSort comes with some benchmark tests.  
 
-Rnn `zig build test -Doptimize=ReleaseFast` to run the benchmarks.
+Run `zig build test -Doptimize=ReleaseFast` to run the benchmarks.
 
 
 ## License

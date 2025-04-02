@@ -13,6 +13,8 @@ const ArrayList = std.ArrayList;
 const indexOfScalar = std.mem.indexOfScalar;
 const StringHashMap = std.hash_map.StringHashMap;
 const AutoHashMap = std.hash_map.AutoHashMap;
+const parseInt = std.fmt.parseInt;
+const tokenizeScalar = std.mem.tokenizeScalar;
 
 
 pub fn TopoSort(comptime T: type) type {
@@ -60,6 +62,29 @@ pub fn TopoSort(comptime T: type) type {
         pub fn add_deps(self: *Self, dependent: T, leadings: []const T) !void {
             for (leadings) |leading| {
                 try self.add(leading, dependent);
+            }
+        }
+
+        /// Add graph data from text input, in the form of:
+        /// "(a b) (a c) (d) (c e f g)"
+        /// where a depends on b, a on c, d on none, and c on e/f/g.
+        pub fn add_graph(self: *Self, graph_data: []const u8) !void {
+            var rules = tokenizeScalar(u8, graph_data, '(');        // break by '('
+            while (rules.next()) |each_rule| {
+                const rule = std.mem.trim(u8, each_rule, " )");     // trim off ' ' and ')'
+                var terms = tokenizeScalar(u8, rule, ' ');          // break by ' '
+                const dependent = terms.next() orelse "";
+                if (terms.peek() == null) {
+                    const dep = if (@typeInfo(T) == .int) try parseInt(T, dependent, 10) else dependent;
+                    try self.add(null, dep);
+                }
+                while (terms.next()) |lead| {
+                    if (@typeInfo(T) == .int) {
+                        try self.add(try parseInt(T, lead, 10), try parseInt(T, dependent, 10));
+                    } else {
+                        try self.add(lead, dependent);
+                    }
+                }
             }
         }
 
@@ -277,7 +302,7 @@ pub fn SortResult(comptime T: type) type {
             return self.data.sorted_sets;
         }
 
-        /// Copy the topologically nodes into the ArrayList provided by caller.
+        /// Copy the topologically sorted nodes into the ArrayList provided by caller.
         /// Return the caller provided list.
         pub fn get_sorted_list(self: Self, list: *ArrayList(T)) !*ArrayList(T) {
             for (self.get_sorted_sets().items) |set| {

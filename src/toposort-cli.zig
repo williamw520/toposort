@@ -18,8 +18,7 @@ const g_allocator = gpa.allocator();
 const TopoSort = toposort.TopoSort;
 const SortResult = toposort.SortResult;
 const IntNode = usize;
-
-const MyErrors = error{ MissingRangeValue };
+const MyErrors = error{ MissingRangeValue, MissingGraphData };
 
 
 /// A command line tool that reads dependency data from file and
@@ -35,19 +34,24 @@ pub fn main() !void {
             return;
         };
 
-        const file_data = read_file(args.data_file) catch |err| {
-            std.debug.print("Error in reading the data file. {}\n", .{err});
-            usage(args);
-            return;
-        };
-        defer g_allocator.free(file_data);
+        const need_file_data = args.graph_data == null;
+        var data: []const u8 = args.graph_data orelse undefined;
+
+        if (need_file_data) {
+            data = read_file(args.data_file) catch |err| {
+                std.debug.print("Error in reading the data file. {}\n", .{err});
+                usage(args);
+                return;
+            };
+        }
+        defer if (need_file_data) g_allocator.free(data);
 
         if (args.is_int) {
             const T = IntNode;
-            try process_data(T, file_data, args);
+            try process_data(T, need_file_data, data, args);
         } else {
             const T = []const u8;
-            try process_data(T, file_data, args);
+            try process_data(T, need_file_data, data, args);
         }
     }
 
@@ -64,16 +68,18 @@ fn read_file(data_file: []const u8) ![]const u8 {
     return file_data;
 }
 
-fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
+fn process_data(comptime T: type, has_file_data: bool, data: []const u8, args: CmdArgs) !void {
     // This starts the steps of using TopoSort.
-    var tsort = try TopoSort(T).init(g_allocator,
-                                     .{ .verbose = args.is_verbose, .max_range = args.max_range });
+    var tsort = try TopoSort(T).init(g_allocator, .{
+                                        .verbose = args.is_verbose,
+                                        .max_range = args.max_range
+                                    });
     defer tsort.deinit();
 
-    // Add the dependency of each line to TopoSort.
-    var lines = std.mem.tokenizeScalar(u8, file_data, '\n');
-    while (lines.next()) |line| {
-        try process_line(line, T, &tsort);
+    if (has_file_data) {
+        try add_file_data(data, T, &tsort);
+    } else {
+        try tsort.add_graph(data);
     }
 
     // Do the sort.
@@ -90,7 +96,14 @@ fn process_data(comptime T: type, file_data: []const u8, args: CmdArgs) !void {
         try dump_ordered(T, result);
         dump_nodes(T, result);
         dump_cycle(T, result);
-        // dump_dep_tree(T, result);
+    }
+}
+
+fn add_file_data(data: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
+    // Add the dependency of each line to TopoSort.
+    var lines = std.mem.tokenizeScalar(u8, data, '\n');
+    while (lines.next()) |line| {
+        try process_line(line, T, tsort);
     }
 }
 
@@ -101,17 +114,17 @@ fn process_line(line: []const u8, comptime T: type, tsort: *TopoSort(T)) !void {
     const dependent = std.mem.trim(u8, first, " \t\r\n");
     if (dependent.len == 0)
         return;
-    const dep_num   = if (T == IntNode) try std.fmt.parseInt(IntNode, dependent, 10);
 
     const rest      = tokens.next() orelse "";  // the rest are leading/required nodes.
     var rest_tokens = std.mem.tokenizeScalar(u8, rest, ' ');
     while (rest_tokens.next()) |token| {
         const lead  = std.mem.trim(u8, token, " \t\r\n");
         if (T == IntNode) {
-            const lead_num: ?T = if (lead.len == 0) null else try std.fmt.parseInt(IntNode, lead, 10);
+            const dep_num       = if (T == IntNode) try std.fmt.parseInt(IntNode, dependent, 10);
+            const lead_num: ?T  = if (lead.len == 0) null else try std.fmt.parseInt(IntNode, lead, 10);
             try tsort.add(lead_num, dep_num);
         } else {
-            const lead_txt: ?T = if (lead.len == 0) null else lead;
+            const lead_txt: ?T  = if (lead.len == 0) null else lead;
             try tsort.add(lead_txt, dependent);
         }
     }
@@ -127,9 +140,9 @@ fn dump_ordered(comptime T: type, result: SortResult(T)) !void {
     }
     std.debug.print(" ]\n", .{});
 
+    std.debug.print("  Topologically sorted list: [ ", .{});
     var sorted_list = ArrayList(T).init(g_allocator);
     defer sorted_list.deinit();
-    std.debug.print("  Topologically sorted list: [ ", .{});
     for ((try result.get_sorted_list(&sorted_list)).items) |node| {
         dump_node(T, node);
     }
@@ -191,22 +204,25 @@ fn usage(args: CmdArgs) void {
     std.debug.print(
         \\
         \\Usage:
-        \\  {s} --data data.file [--int] [--max-range N] [--verbose]
+        \\  {s} --data data.file [--int] [--max-range N] [--verbose] [--graph data]
         \\
         \\      --data data.file  - contains the dependency node pairs. A: B, or A: B C D
         \\      --int  - treats the dependency node pair as numbers.
         \\      --max_range N  - gives max numeric range for the numeric node value.
         \\      --verbose  - prints processing messages.
+        \\      --graph data  - where data is "(a b) (b c) (c d) ..."
         \\
         , .{program_name});
 }
 
+// Poorman's quick and dirty command line argument parsing.
 const CmdArgs = struct {
     const Self = @This();
 
     arg_itr:        ArgIterator,
     program:        []const u8,
     data_file:      []const u8,         // the dependency data file.
+    graph_data:     ?[]const u8,        // the dependency data from command line.
     max_range:      ?usize,
     is_int:         bool,               // process the terms in file as number.
     is_verbose:     bool,
@@ -216,6 +232,7 @@ const CmdArgs = struct {
             .arg_itr = try std.process.argsWithAllocator(allocator),
             .program = "",
             .data_file = "data.txt",    // default to data.txt in the working dir.
+            .graph_data = null,
             .max_range = null,
             .is_int = false,
             .is_verbose = false,        // dump processing states.
@@ -242,6 +259,12 @@ const CmdArgs = struct {
                 }
             } else if (std.mem.eql(u8, arg, "--verbose")) {
                 self.is_verbose = true;
+            } else if (std.mem.eql(u8, arg, "--graph")) {
+                if (std.mem.sliceTo(argv.next(), 0)) |data| {
+                    self.graph_data = data;
+                } else {
+                    return error.MissingGraphData;
+                }
             }
         }
     }
