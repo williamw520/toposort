@@ -128,7 +128,8 @@ pub fn TopoSort(comptime T: type) type {
         // This algorithm iteratively finds out the root sets of the graph.
         // 1. Find the first root set of the graph.
         // 2. Remove the nodes of the root set from the graph.
-        // 3. Find the next root set, until graph is empty.
+        // 3. Find the next root set. Go to 2 until the graph is empty.
+        // The successive root sets form a topological order.
         // A root set consists of nodes depending on no other nodes, i.e.
         // nodes whose incoming link count is 0.
         fn run_algorithm(self: *Self, incomings: []u32, visited: []bool) !void {
@@ -144,7 +145,8 @@ pub fn TopoSort(comptime T: type) type {
             while (curr_root.items.len > 0) {
                 try self.add_sorted_set(curr_root);         // emit non-dependent items.
                 for (curr_root.items) |root_id| {
-                    visited[root_id] = true;                // mark to prevent cycles.
+                    visited[root_id] = true;                // mark to detect cycles.
+                    // decrement the incomings of root's dependents to remove the root.
                     for (self.data.dependents[root_id].items) |dep_id| {
                         if (visited[dep_id]) continue;      // cycle encountered, skip.
                         incomings[dep_id] -= 1;

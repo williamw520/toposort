@@ -263,6 +263,26 @@ Specify the whole graph in the command line.
   zig-out/bin/toposort-cli --graph "(a b) (a c) (d) (c e f g)"
 ```
 
+## Standalone Build
+
+To build the project itself, git clone the repository, then run the standard zig build commands.
+The binary output is in zig-out/bin/toposort-cli
+
+
+```
+zig build
+```
+
+This runs the CLI from the zig build directly.
+```
+zig build run -- --data data/data.txt
+```
+
+This runs the CLI with graph input on the command line.
+```
+zig build run -- --graph "(a b) (a c) (b d) (c d)"
+```
+
 ## Benchmarks
 
 TopoSort comes with some benchmark tests.  
