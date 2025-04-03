@@ -74,9 +74,9 @@ pub fn TopoSort(comptime T: type) type {
                 const rule = std.mem.trim(u8, each_rule, " )");     // trim off ' ' and ')'
                 var terms = tokenizeScalar(u8, rule, ' ');          // break by ' '
                 const dep = terms.next() orelse "";
-                if (terms.peek() == null) {
-                    const dep_num = if (@typeInfo(T) == .int) try parseInt(T, dep, 10) else dep;
-                    try self.add(null, dep_num);
+                if (dep.len > 0 and terms.peek() == null) {
+                    const d = if (@typeInfo(T) == .int) try parseInt(T, dep, 10) else dep;
+                    try self.add(null, d);
                 }
                 while (terms.next()) |lead| {
                     if (@typeInfo(T) == .int) {
@@ -95,12 +95,12 @@ pub fn TopoSort(comptime T: type) type {
             if (self.data.verbose) self.print_dependents();
             if (self.data.verbose) self.print_leaders();
 
-            // counts of incoming leading links to each node.
+            // count the incoming leading links to each node.
             const incomings: []u32 = try self.allocator.alloc(u32, self.data.node_count());
             defer self.allocator.free(incomings);
             try self.setup_incomings(incomings);
 
-            // track whether a node has been visited; also for finding cycles.
+            // track whether a node has been visited, for finding cycles.
             const visited: []bool = try self.allocator.alloc(bool, self.data.node_count());
             defer self.allocator.free(visited);
             @memset(visited, false);
@@ -133,17 +133,17 @@ pub fn TopoSort(comptime T: type) type {
         // A root set consists of nodes depending on no other nodes, i.e.
         // nodes whose incoming link count is 0.
         fn run_algorithm(self: *Self, incomings: []u32, visited: []bool) !void {
-            // Double-buffer to hold the root nodes of the graph for each running round.
+            // Double-buffer to hold the root sets of the graph for each round.
             // Root nodes have no incoming leading links, i.e. they depend on no one.
             var curr_root = ArrayList(u32).init(self.allocator);
             var next_root = ArrayList(u32).init(self.allocator);
             defer curr_root.deinit();
             defer next_root.deinit();
 
-            try scan_zero_incoming(incomings, &curr_root);  // find the initial set.
-            try self.save_root_set(curr_root);              // save the initial root set.
+            try scan_zero_incoming(incomings, &curr_root);  // find the initial root set.
+            try self.save_root_set(curr_root);              // it's the root set of the graph.
             while (curr_root.items.len > 0) {
-                try self.add_sorted_set(curr_root);         // emit non-dependent items.
+                try self.emit_sorted_set(curr_root);        // emit the non-dependent set.
                 for (curr_root.items) |root_id| {
                     visited[root_id] = true;                // mark to detect cycles.
                     // decrement the incomings of root's dependents to remove the root.
@@ -192,12 +192,14 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
+        // Save the root set to the entire graph.
         fn save_root_set(self: *Self, root_set: ArrayList(u32)) !void {
             self.data.root_set_id.clearRetainingCapacity();
             try self.data.root_set_id.appendSlice(root_set.items);
         }
 
-        fn add_sorted_set(self: *Self, curr_root: ArrayList(u32)) !void {
+        // Save the root set in the topological order result.
+        fn emit_sorted_set(self: *Self, curr_root: ArrayList(u32)) !void {
             var sorted_set = ArrayList(T).init(self.allocator);
             for (curr_root.items) |id| {
                 try sorted_set.append(self.data.get_node(id));
