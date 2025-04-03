@@ -92,7 +92,7 @@ fn process_data(comptime T: type, has_file_data: bool, data: []const u8, args: C
         dump_nodes(T, result);
         dump_dep_tree(T, result);
     } else {
-        std.debug.print("Failed to process graph data. Dependency graph has cycles.\n", .{});
+        std.debug.print("Failed to process graph data. Graph has cycles.\n", .{});
         try dump_ordered(T, result);
         dump_nodes(T, result);
         dump_cycle(T, result);
