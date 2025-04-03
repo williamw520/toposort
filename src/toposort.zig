@@ -100,21 +100,21 @@ pub fn TopoSort(comptime T: type) type {
             defer self.allocator.free(incomings);
             try self.setup_incomings(incomings);
 
-            // track whether a node has been visited, for finding cycles.
-            const visited: []bool = try self.allocator.alloc(bool, self.data.node_count());
-            defer self.allocator.free(visited);
-            @memset(visited, false);
+            // track whether a node has been rooted, for finding cycles.
+            const rooted: []bool = try self.allocator.alloc(bool, self.data.node_count());
+            defer self.allocator.free(rooted);
+            @memset(rooted, false);
             
             if (self.data.verbose) {
                 try self.print_nodes();
                 try self.print_incomings(incomings);    // print the before counts.
             }
 
-            try self.run_algorithm(incomings, visited);
+            try self.run_algorithm(incomings, rooted);
 
             if (self.data.verbose) {
                 try self.print_incomings(incomings);    // print the after counts.
-                try self.print_visited(visited);
+                try self.print_rooted(rooted);
                 try self.print_sorted();
                 try self.print_cycle();
             }
@@ -132,7 +132,7 @@ pub fn TopoSort(comptime T: type) type {
         // The successive root sets form a topological order.
         // A root set consists of nodes depending on no other nodes, i.e.
         // nodes whose incoming link count is 0.
-        fn run_algorithm(self: *Self, incomings: []u32, visited: []bool) !void {
+        fn run_algorithm(self: *Self, incomings: []u32, rooted: []bool) !void {
             // Double-buffer to hold the root sets of the graph for each round.
             // Root nodes have no incoming leading links, i.e. they depend on no one.
             var curr_root = ArrayList(u32).init(self.allocator);
@@ -145,10 +145,11 @@ pub fn TopoSort(comptime T: type) type {
             while (curr_root.items.len > 0) {
                 try self.emit_sorted_set(curr_root);        // emit the non-dependent set.
                 for (curr_root.items) |root_id| {
-                    visited[root_id] = true;                // mark to detect cycles.
+                    rooted[root_id] = true;                 // node in root set is marked.
                     // decrement the incomings of root's dependents to remove the root.
                     for (self.data.dependents[root_id].items) |dep_id| {
-                        if (visited[dep_id]) continue;      // cycle encountered, skip.
+                        if (rooted[dep_id])                 // dependent already a root node.
+                            continue;                       // cycle detected; skip.
                         incomings[dep_id] -= 1;
                         if (incomings[dep_id] == 0) try next_root.append(dep_id);
                     }
@@ -156,7 +157,7 @@ pub fn TopoSort(comptime T: type) type {
                 std.mem.swap(ArrayList(u32), &curr_root, &next_root);
                 next_root.clearRetainingCapacity();         // reset for next round.
             }
-            try self.collect_cyclic_nodes(visited);
+            try self.collect_cyclic_nodes(rooted);
         }
 
         fn setup_leaders_dependents(self: *Self) !void {
@@ -207,10 +208,10 @@ pub fn TopoSort(comptime T: type) type {
             try self.data.sorted_sets.append(sorted_set);
         }
 
-        fn collect_cyclic_nodes(self: *Self, visited: []bool) !void {
+        fn collect_cyclic_nodes(self: *Self, rooted: []bool) !void {
             self.data.cycle.clearRetainingCapacity();
-            for (visited, 0..) |flag, id| {
-                // Node not visited was skipped in run_algorithm() due to cycle detected.
+            for (rooted, 0..) |flag, id| {
+                // Node not rooted was skipped in run_algorithm() due to cycle detected.
                 if (!flag) try self.data.cycle.append(@intCast(id));
             }
         }
@@ -252,12 +253,12 @@ pub fn TopoSort(comptime T: type) type {
             std.debug.print("]\n", .{});
         }
 
-        fn print_visited(self: Self, visited: []bool) !void {
-            std.debug.print("  visited: [ ", .{});
-            for (visited, 0..) |flag, id| {
+        fn print_rooted(self: Self, rooted: []bool) !void {
+            std.debug.print("  rooted: [ ", .{});
+            for (rooted, 0..) |flag, id| {
                 const txt = try as_alloc_str(T, self.data.get_node(id), self.allocator);
                 defer self.allocator.free(txt);
-                std.debug.print("{}:{s} #{}, ", .{id, txt, flag});
+                std.debug.print("{}:{s} {}, ", .{id, txt, flag});
             }
             std.debug.print("]\n", .{});
         }
@@ -273,7 +274,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         fn print_sorted(self: Self) !void {
-            std.debug.print("  sorted [", .{});
+            std.debug.print("  sorted sets [", .{});
             for (self.data.sorted_sets.items) |sublist| {
                 std.debug.print(" {{ ", .{});
                 for(sublist.items) |node| {

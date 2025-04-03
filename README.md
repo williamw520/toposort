@@ -8,7 +8,7 @@ TopoSort is a highly efficient Zig library for performing topological sort on de
 * Cycle detection and cycle reporting.
 * Support different node types.
 
-[Algorithm](./Algorithm.md)
+[Algorithm description](./Algorithm.md)
 
 ## Content
 
