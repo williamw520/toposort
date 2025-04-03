@@ -1,7 +1,7 @@
 
 # TopoSort Algorithm
 
-William Wong
+William Wong, 2025-04-02
 
 The algorithm used in TopoSort is a variant to the Kahn's algorithm, 
 with the additions on finding dependence-free subsets and finding cyclic nodes.
@@ -44,17 +44,29 @@ It follows that each root set removed during the iteration has no dependence
 on any other root sets coming after it, thus the sequence of successively removed
 root sets forms a topological order.
 
-By definition, the nodes in a root set have no dependence among themselves;
-that's why they are selected as the root nodes to begin with.
+## Dependence Free Subsets
+
+The nodes in a root set have no dependence among themselves since root nodes 
+by definition depend on no other nodes.  These dependence-free nodes in 
+a root set allow parallel processing within the scope of the root set.
+
 When the nodes of all the root sets are lining up in the order of the root sets,
 they form a topological order, too.
 
-Further, the nodes in a root set are dependence free from each other, allowing
-parallel processing within the scope of the root set.
+## Cyclic Node Detection
 
 A "rooted" list is used to track whether a node has become a root node.
-When examining the dependents of a root node to find the next set of roots,
-if a dependent is already in the rooted list, it means it has become a root
+When traversing the dependents of a root node to find the next set of roots,
+if a dependent is in the rooted list, it means it has already become a root
 before.  That means a cycle exists in the graph linking an already rooted
 node as a dependent for another node.
+
+Instead of aborting, the traversing of the dependent of a root node can be 
+merely skipped. This stops going into the cycle and allows the algorithm to
+continue with the rest of the nodes.  A partial list of the topological order
+nodes can be produced at the end.
+
+After the main iteration, any nodes not in the "rooted" list can be classified
+as parts of the cycles since they were not reachable due to the prior cycle 
+skipping when traversing the dependents of root nodes.
 

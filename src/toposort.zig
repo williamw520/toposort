@@ -141,14 +141,14 @@ pub fn TopoSort(comptime T: type) type {
             defer next_root.deinit();
 
             try scan_zero_incoming(incomings, &curr_root);  // find the initial root set.
-            try self.save_root_set(curr_root);              // it's the root set of the graph.
+            try self.save_root_set(curr_root);              // the real root set of the graph.
             while (curr_root.items.len > 0) {
                 try self.emit_sorted_set(curr_root);        // emit the non-dependent set.
                 for (curr_root.items) |root_id| {
-                    rooted[root_id] = true;                 // node in root set is marked.
-                    // decrement the incomings of root's dependents to remove the root.
+                    rooted[root_id] = true;                 // node has become a root.
+                    // decrement the incomings of the root's dependents to remove the root.
                     for (self.data.dependents[root_id].items) |dep_id| {
-                        if (rooted[dep_id])                 // dependent already a root node.
+                        if (rooted[dep_id])                 // dependent was a root node already.
                             continue;                       // cycle detected; skip.
                         incomings[dep_id] -= 1;
                         if (incomings[dep_id] == 0) try next_root.append(dep_id);
