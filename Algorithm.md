@@ -47,41 +47,46 @@ When node x is removed, the incoming link to y is removed as well.
 
 Removing the nodes of a root set from the graph causes the remaining nodes
 depending on them to have one less dependence, i.e. their incoming links are removed
-and the incoming link count decremented.  For the nodes whose incoming links
+by one and the counts of incoming links decremented.  For the nodes whose incoming links
 reaching 0, they become the new root nodes as they depend on no one.
 
 We observe that set A has no dependence on set B when all members of A have
 no dependence on any member of B.
 
 It follows that each root set removed during the iteration has no dependence
-on any other root sets coming after it, thus the sequence of successively removed
-root sets forms a topological order.
+on any other root sets coming after it since its nodes have no dependence
+on any nodes of the root sets coming after, thus the sequence of successively 
+removed root sets forms a topological order.
 
 ## Dependence Free Subsets
 
 The nodes in a root set have no dependence among themselves since root nodes 
-by definition depend on no other nodes.  These dependence free nodes in 
-a root set allow parallel processing within the scope of the root set.
+by definition depend on no other nodes. The root sets become subsets of the graph
+containing independent nodes.  The dependence free nodes in a subset allow 
+parallel processing within the scope of the set.
 
-Subsequent root sets do depend on previous root sets
+Subsequent root sets do depend on the previous root sets, thus serialized
+processing is still required among subsets following the topological order.
 
-When the nodes of all the root sets are lining up in the order of the root sets,
-they form a topological order, too.
+## Topological Sorting of Nodes
+
+When the nodes of all the root sets are lining up in the topological order
+of the root sets, they also form a topological order as well.
 
 ## Cyclic Node Detection
 
 A "rooted" list is used to track whether a node has become a root.
 When traversing the dependents of a root node to find the next set of roots,
-a dependent in the rooted list means it has already become a root
-before.  That means a cycle exists in the graph linking an already rooted
+a dependent found in the rooted list means it has become a root before.
+That means a cycle exists in the graph linking an already rooted
 node as a dependent for another node.
 
-Instead of aborting, the traversing of the dependent of a root node can be 
+Instead of aborting, the traversing of the dependent node can be 
 merely skipped. This stops going into the cycle and allows the algorithm to
 continue with the rest of the nodes.  A partial list of the topological order
-nodes can be produced at the end.
+nodes will be eventually produced.
 
 After the main iteration, any nodes not in the "rooted" list can be classified
-as parts of the cycles since they were not reachable due to the prior cycle 
+as parts of the cycles since they are not reachable due to the prior cycle 
 skipping when traversing the dependents of root nodes.
 
