@@ -122,7 +122,7 @@ pub fn TopoSort(comptime T: type) type {
             return SortResult(T).init(self.data);
         }
 
-        // This is a variant to the Kahn's algorithm, with additions on
+        // This is a variant to the Kahn's algorithm, with the additions on
         // finding dependence-free subsets and finding the cyclic nodes.
         //
         // This algorithm iteratively finds out the root sets of the graph.
