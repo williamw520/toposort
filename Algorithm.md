@@ -32,7 +32,7 @@ For a graph with nodes `{a, b, c, d, e, f}`, successively removed root sets look
 {a, b} {d} {c, e} {f}
 ```
 
-## Rational
+## Rationale
 
 By definition, a topological order of the nodes of a directed acyclic graph (DAG)
 is that the nodes are linearly ordered in such a way that
