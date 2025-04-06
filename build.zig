@@ -29,13 +29,6 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    // const lib = b.addLibrary(.{
-    //     .linkage = .static,
-    //     .name = "toposort",
-    //     .root_module = toposort_mod,
-    // });
-    // b.installArtifact(lib);
-
     const run_cmd = b.addRunArtifact(exe);
 
     run_cmd.step.dependOn(b.getInstallStep());
