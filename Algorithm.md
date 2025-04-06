@@ -1,5 +1,5 @@
 
-# TopoSort Algorithm
+# TopoSort Algorithm - Set Based Topological Sort
 
 William Wong, 2025-04-02
 
@@ -100,7 +100,8 @@ skipping logic when traversing the dependents of root nodes.
   Each element is a list of node id depending on the node.
 
 - Let incomings = [0..N] of integer, array of the counts of the incoming links of the nodes.
-  Node ids are used as array index.
+  Node ids are used as array index. The array is used to classify nodes as being in the graph
+  or been removed.
 
 - Let rooted = [0..N] of boolean, array of flags indicating whether a node has become root.
   Node ids are used as array index.
