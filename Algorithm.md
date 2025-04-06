@@ -24,13 +24,14 @@ of the root sets.
 
 ## Example
 
-For a graph with nodes `{a, b, c, d, e, f}`, successively removed root sets look like:
+For a graph with nodes `{a, b, c, d, e, f}` and with the dependency of `(a -> d) (b -> d) (d -> c) (d -> e) (e -> f)`, 
+successively removed root sets look like:
 
 ```
 {a, b} | {c, d, e, f}
 {a, b} {d} | {c, e, f}
 {a, b} {d} {c, e} | {f}
-{a, b} {d} {c, e} {f}
+{a, b} {d} {c, e} {f} |
 ```
 
 ## Rationale
@@ -38,17 +39,18 @@ For a graph with nodes `{a, b, c, d, e, f}`, successively removed root sets look
 By definition, a topological order of the nodes of a directed acyclic graph (DAG)
 is a linear node arrangement that a node has no dependence on any other nodes coming after it.
 
-For a directed acyclic graph, there exist some nodes which depend on no other nodes. 
+For a directed acyclic graph, there exist some nodes which depend on no other nodes. E.g. the {a, b} above.
 These are the root nodes of the graph, where graph traversal begins.
 These form the root set of the graph.
 
-We define that when a node y depends on node x, node y has an incoming link from x.
-When node x is removed, the incoming link to y is removed as well.
+We define that when a node y depends on node x, node y has an incoming link from x, 
+(x -> y). When node x is removed, the incoming link to y is removed as well.
 
 Removing the nodes of a root set from the graph causes the remaining nodes
 depending on them to have one less dependence, i.e. their incoming links are removed
 by one and the counts of incoming links decremented.  For the nodes whose incoming links
-reaching 0, they become the new root nodes now as they depend on no one.
+reaching 0, they become the new root nodes now as they depend on no one. 
+E.g. the {d} above after the first round.
 
 We observe that set A has no dependence on set B when all members of set A have
 no dependence on any member of set B.
@@ -104,13 +106,13 @@ skipping logic when traversing the dependents of root nodes.
   or been removed.
 
 - Let rooted = [0..N] of boolean, array of flags indicating whether a node has become root.
-  Node ids are used as array index.
+  Initialize it to all falses. Node ids are used as array index.
 
 - Let current_root_set = the list of node id of the current root set in the current round.
 
 - Let next_root_set = the list of node id of the next root set in the next round.
 
-- Let result = list holding the topologically sort sets.
+- Let result = list holding the topologically sort sets. Initialize it to empty.
 
 - Find the initial root set by scanning the incomings array for 0 count entries.
   Collect the found node id and add them to current_root_set.
