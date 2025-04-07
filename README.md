@@ -5,8 +5,10 @@ It uses a novel set based approach for finding the topological order.
 This small library is packed with the following features:
 
 * Building dependency graph from dependency data.
-* Performing topological sort on the dependency graph.
+* Performing set based topological sort on the graph.
+* Partitioning the graph in topological ordered subsets.
 * Generating dependence-free subsets for parallel processing.
+* Generating topological order on the nodes.
 * Cycle detection and cycle reporting.
 * Support different node types.
 
