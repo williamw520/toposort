@@ -291,9 +291,109 @@ zig build run -- --graph "(a b) (a c) (b d) (c d)"
 ## Benchmarks
 
 TopoSort comes with some benchmark tests.  
-
+ 
 Run `zig build test -Doptimize=ReleaseFast` to run the benchmarks.
 
+Note that the benchmarks take couple minutes to run, especially for the debug mode bulid.
+Comment out some benchmarks in the test section of toposort.zig for faster run.
+
+### Benchmark Runs
+
+Benchmarks ran on a ThinkPad T14 Gen 2 (year 2021), with an AMD Ryzen 7 PRO 5850U CPU,
+plugged-in with the max power plan, on a single core since the benchmarks are single threaded.
+
+---
+The first two sets of benchmarks check the effect of increasing the node counts in 10X factor, 
+with 1 link between nodes. Notice the times scaling up in locked steps with the node counts.
+The observation fits the asymptotic complexity predication of O(|N| + |L|).
+See [Algorithm](./Algorithm.md).
+```
+Benchmark increasing node in 10X scale on branching 1, with max_range
+    Add dep    10000 nodes      1 links, time:    0ms, 30478512 nodes/s,    32 ns/node.
+       Sort    10000 nodes      1 links, time:    2ms,  4130729 nodes/s,   242 ns/node.
+    Add dep   100000 nodes      1 links, time:    2ms, 36524877 nodes/s,    27 ns/node.
+       Sort   100000 nodes      1 links, time:   16ms,  6142204 nodes/s,   162 ns/node.
+    Add dep  1000000 nodes      1 links, time:   25ms, 39343405 nodes/s,    25 ns/node.
+       Sort  1000000 nodes      1 links, time:  152ms,  6568506 nodes/s,   152 ns/node.
+
+Benchmark increasing node in 10X scale on branching 1, no max_range
+    Add dep    10000 nodes      1 links, time:    0ms, 15052533 nodes/s,    66 ns/node.
+       Sort    10000 nodes      1 links, time:    1ms,  6421535 nodes/s,   155 ns/node.
+    Add dep   100000 nodes      1 links, time:    7ms, 13353452 nodes/s,    74 ns/node.
+       Sort   100000 nodes      1 links, time:   15ms,  6263513 nodes/s,   159 ns/node.
+    Add dep  1000000 nodes      1 links, time:   99ms, 10048790 nodes/s,    99 ns/node.
+       Sort  1000000 nodes      1 links, time:  155ms,  6435034 nodes/s,   155 ns/node.
+```
+---
+The following benchmarks check the effect of increasing the node counts and the link counts
+at the same time. Notice the times actually go down for more links and back up around 2000 links.
+This is because the number of root sets goes down as more links fitted into the root sets,
+so the number of root sets needed to be processed goes down.  Passed 2000 links, the time needed to 
+process the links in each root set starts to dominate.
+The times is still scaling up in locked steps with the node and link counts.
+The observation fits the asymptotic complexity predication of O(|N| + |L|).
+```
+Benchmark increasing node and increasing link branching, with max_range
+ Add + Sort    10000 nodes      2 links, time:    1ms, 11015156 nodes/s,    90 ns/node.
+ Add + Sort   100000 nodes      2 links, time:   16ms, 11856236 nodes/s,    84 ns/node.
+ Add + Sort  1000000 nodes      2 links, time:  163ms, 12261454 nodes/s,    81 ns/node.
+ Add + Sort    10000 nodes     10 links, time:    1ms, 16649739 nodes/s,    60 ns/node.
+ Add + Sort   100000 nodes     10 links, time:   10ms, 19924724 nodes/s,    50 ns/node.
+ Add + Sort  1000000 nodes     10 links, time:  103ms, 19407715 nodes/s,    51 ns/node.
+ Add + Sort    10000 nodes    100 links, time:    0ms, 21518333 nodes/s,    46 ns/node.
+ Add + Sort   100000 nodes    100 links, time:    9ms, 22152123 nodes/s,    45 ns/node.
+ Add + Sort  1000000 nodes    100 links, time:   91ms, 21815646 nodes/s,    45 ns/node.
+ Add + Sort    10000 nodes   1000 links, time:    1ms, 18115942 nodes/s,    55 ns/node.
+ Add + Sort   100000 nodes   1000 links, time:   10ms, 18555354 nodes/s,    53 ns/node.
+ Add + Sort  1000000 nodes   1000 links, time:  108ms, 18410920 nodes/s,    54 ns/node.
+ Add + Sort    10000 nodes   2000 links, time:    1ms, 14957968 nodes/s,    66 ns/node.
+ Add + Sort   100000 nodes   2000 links, time:   13ms, 14565072 nodes/s,    68 ns/node.
+ Add + Sort  1000000 nodes   2000 links, time:  137ms, 14512509 nodes/s,    68 ns/node.
+ Add + Sort    10000 nodes   3000 links, time:    1ms, 19243721 nodes/s,    51 ns/node.
+ Add + Sort   100000 nodes   3000 links, time:   15ms, 12721157 nodes/s,    78 ns/node.
+ Add + Sort  1000000 nodes   3000 links, time:  161ms, 12353403 nodes/s,    80 ns/node.
+ Add + Sort    10000 nodes   4000 links, time:    0ms, 22124383 nodes/s,    45 ns/node.
+ Add + Sort   100000 nodes   4000 links, time:   18ms, 10958015 nodes/s,    91 ns/node.
+ Add + Sort  1000000 nodes   4000 links, time:  192ms, 10407791 nodes/s,    96 ns/node. 
+ Add + Sort    10000 nodes   5000 links, time:    1ms, 17566048 nodes/s,    56 ns/node.
+ Add + Sort   100000 nodes   5000 links, time:   20ms,  9987086 nodes/s,   100 ns/node.
+ Add + Sort  1000000 nodes   5000 links, time:  210ms,  9493224 nodes/s,   105 ns/node.
+```
+---
+The following benchmarks check the increasing link counts on a fixed node count (1M).
+The times for link count are flat until about 2000 links, which is when the link
+processing starts to dominate the running time.
+The times is scaling up in locked steps with the link counts, 
+though not doubling as in the case of increasing nodes.
+The observation fits the asymptotic complexity predication of O(|N| + |L|).
+Note that the time per node really suffers as each node has more links to process.
+```
+Benchmark increasing large link branching, with max_range
+ Add + Sort  1000000 nodes    100 links, time:   89ms, 22341812 nodes/s,    44 ns/node.
+ Add + Sort  1000000 nodes    200 links, time:   90ms, 22056212 nodes/s,    45 ns/node.
+ Add + Sort  1000000 nodes    300 links, time:   93ms, 21413746 nodes/s,    46 ns/node.
+ Add + Sort  1000000 nodes    400 links, time:   94ms, 21208053 nodes/s,    47 ns/node.
+ Add + Sort  1000000 nodes    500 links, time:   96ms, 20661978 nodes/s,    48 ns/node.
+ Add + Sort  1000000 nodes    600 links, time:  100ms, 19885538 nodes/s,    50 ns/node.
+ Add + Sort  1000000 nodes   1000 links, time:  109ms, 18250731 nodes/s,    54 ns/node.
+ Add + Sort  1000000 nodes   2000 links, time:  137ms, 14574640 nodes/s,    68 ns/node.
+ Add + Sort  1000000 nodes   3000 links, time:  161ms, 12364630 nodes/s,    80 ns/node.
+ Add + Sort  1000000 nodes   4000 links, time:  190ms, 10520593 nodes/s,    95 ns/node.
+ Add + Sort  1000000 nodes   5000 links, time:  208ms,  9587661 nodes/s,   104 ns/node.
+ Add + Sort  1000000 nodes   6000 links, time:  234ms,  8534598 nodes/s,   117 ns/node.
+ Add + Sort  1000000 nodes  10000 links, time:  337ms,  5933957 nodes/s,   168 ns/node.
+ Add + Sort  1000000 nodes  20000 links, time:  619ms,  3229246 nodes/s,   309 ns/node.
+ Add + Sort  1000000 nodes  30000 links, time:  847ms,  2360065 nodes/s,   423 ns/node.
+ Add + Sort  1000000 nodes  40000 links, time: 1074ms,  1861957 nodes/s,   537 ns/node.
+ Add + Sort  1000000 nodes  50000 links, time: 1309ms,  1526782 nodes/s,   654 ns/node.
+ Add + Sort  1000000 nodes  60000 links, time: 1461ms,  1368239 nodes/s,   730 ns/node.
+ Add + Sort  1000000 nodes 100000 links, time: 2387ms,   837647 nodes/s,  1193 ns/node.
+ Add + Sort  1000000 nodes 200000 links, time: 4535ms,   440982 nodes/s,  2267 ns/node.
+ Add + Sort  1000000 nodes 300000 links, time: 5224ms,   382826 nodes/s,  2612 ns/node.
+ Add + Sort  1000000 nodes 400000 links, time: 4754ms,   420658 nodes/s,  2377 ns/node.
+ Add + Sort  1000000 nodes 500000 links, time: 7339ms,   272490 nodes/s,  3669 ns/node.
+```
+---
 
 ## License
 

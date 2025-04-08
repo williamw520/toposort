@@ -180,8 +180,10 @@ We need O(|N|) for storing the various |N| lengh arrays, and need O(|L|)
 to store the `dependents` array.
 
 Note that for the degenerate case of a complete graph where every node
-depends on every other node, the time complexity is O(|N|^2).
+depends on every other node, the space complexity becomes O(|N|^2) 
+since every element of the `dependents` array has |N| nodes.
 
-The space complexity is also O(|N|^2) since every element of the `dependents` 
-array has |N| nodes.
+## Benchmark
 
+See benchmarks to check the result against the asymptotic predication.
+[Benchmark Runs](./README.md#benchmark-runs).

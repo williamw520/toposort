@@ -520,10 +520,78 @@ fn as_alloc_str(comptime T: type, value: T, allocator: Allocator) ![]u8 {
 test {
     const tests = @import("tests.zig");
 
-    try tests.benchmark1();
-    try tests.benchmark2();
-    try tests.benchmark3();
-    try tests.benchmark4();
+    // Repeat 6 times and throw away the slowest.
+
+    std.debug.print("\nBenchmark increasing node in 10X scale on branching 1, no max_range\n", .{});
+    try tests.benchmark(10000, 1, false, 6, .{ .add = true, .sort = true, .total = false });
+    try tests.benchmark(100000, 1, false, 6, .{ .add = true, .sort = true, .total = false });
+    try tests.benchmark(1000000, 1, false, 6, .{ .add = true, .sort = true, .total = false });
+
+    std.debug.print("\nBenchmark increasing node in 10X scale on branching 1, with max_range\n", .{});
+    try tests.benchmark(10000, 1, true, 6, .{ .add = true, .sort = true, .total = false });
+    try tests.benchmark(100000, 1, true, 6, .{ .add = true, .sort = true, .total = false });
+    try tests.benchmark(1000000, 1, true, 6, .{ .add = true, .sort = true, .total = false });
+
+    std.debug.print("\nBenchmark increasing node and increasing link branching, with max_range\n", .{});
+    try tests.benchmark(10000, 2, true, 6, .{ .total = true });
+    try tests.benchmark(100000, 2, true, 6, .{ .total = true });
+    try tests.benchmark(1000000, 2, true, 6, .{ .total = true });
+
+    try tests.benchmark(10000, 10, true, 6, .{});
+    try tests.benchmark(100000, 10, true, 6, .{});
+    try tests.benchmark(1000000, 10, true, 6, .{});
+
+    try tests.benchmark(10000, 100, true, 6, .{});
+    try tests.benchmark(100000, 100, true, 6, .{});
+    try tests.benchmark(1000000, 100, true, 6, .{});
+
+    try tests.benchmark(10000, 1000, true, 6, .{});
+    try tests.benchmark(100000, 1000, true, 6, .{});
+    try tests.benchmark(1000000, 1000, true, 6, .{});
+
+    try tests.benchmark(10000, 2000, true, 6, .{});
+    try tests.benchmark(100000, 2000, true, 6, .{});
+    try tests.benchmark(1000000, 2000, true, 6, .{});
+
+    try tests.benchmark(10000, 3000, true, 6, .{});
+    try tests.benchmark(100000, 3000, true, 6, .{});
+    try tests.benchmark(1000000, 3000, true, 6, .{});
+
+    try tests.benchmark(10000, 4000, true, 6, .{});
+    try tests.benchmark(100000, 4000, true, 6, .{});
+    try tests.benchmark(1000000, 4000, true, 6, .{});
+
+    try tests.benchmark(10000, 5000, true, 6, .{});
+    try tests.benchmark(100000, 5000, true, 6, .{});
+    try tests.benchmark(1000000, 5000, true, 6, .{});
+
+    std.debug.print("\nBenchmark increasing large link branching, with max_range\n", .{});
+    try tests.benchmark(1000000, 100, true, 3, .{});
+    try tests.benchmark(1000000, 200, true, 3, .{});
+    try tests.benchmark(1000000, 300, true, 3, .{});
+    try tests.benchmark(1000000, 400, true, 3, .{});
+    try tests.benchmark(1000000, 500, true, 3, .{});
+    try tests.benchmark(1000000, 600, true, 3, .{});
+    
+    try tests.benchmark(1000000, 1000, true, 3, .{});
+    try tests.benchmark(1000000, 2000, true, 3, .{});
+    try tests.benchmark(1000000, 3000, true, 3, .{});
+    try tests.benchmark(1000000, 4000, true, 3, .{});
+    try tests.benchmark(1000000, 5000, true, 3, .{});
+    try tests.benchmark(1000000, 6000, true, 3, .{});
+    
+    try tests.benchmark(1000000, 10000, true, 3, .{});
+    try tests.benchmark(1000000, 20000, true, 3, .{});
+    try tests.benchmark(1000000, 30000, true, 3, .{});
+    try tests.benchmark(1000000, 40000, true, 3, .{});
+    try tests.benchmark(1000000, 50000, true, 3, .{});
+    try tests.benchmark(1000000, 60000, true, 3, .{});
+    
+    try tests.benchmark(1000000, 100000, true, 3, .{});
+    try tests.benchmark(1000000, 200000, true, 3, .{});
+    try tests.benchmark(1000000, 300000, true, 3, .{});
+    try tests.benchmark(1000000, 400000, true, 3, .{});
+    try tests.benchmark(1000000, 500000, true, 3, .{});
     
 }
 
