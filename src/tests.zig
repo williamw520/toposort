@@ -18,7 +18,7 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 
 // N - number of nodes, B - dependency branching factor, M - max_range flag, R - repeats
-pub fn benchmark(comptime N: usize, comptime B: usize, comptime M: bool, comptime R: usize,
+pub fn benchmark(N: usize, B: usize, comptime M: bool, comptime R: usize,
                  options: struct {
                      add: bool = false,
                      sort: bool = false,
@@ -40,7 +40,8 @@ pub fn benchmark(comptime N: usize, comptime B: usize, comptime M: bool, comptim
         defer tsort.deinit();
 
         const start1 = nanoTimestamp();
-        for (0..N/B-1) |b| {
+        const batch: usize = N/B-1;
+        for (0..batch) |b| {
             const base = b * B;
             for (1..B) |j| {
                 try tsort.add(list.items[base], list.items[base + j]);
@@ -65,7 +66,7 @@ pub fn benchmark(comptime N: usize, comptime B: usize, comptime M: bool, comptim
 }
 
 
-fn gen_int_items(comptime N: usize, comptime T: type, allocator: Allocator) !ArrayList(T) {
+fn gen_int_items(N: usize, comptime T: type, allocator: Allocator) !ArrayList(T) {
     var list = ArrayList(T).init(allocator);
     for (0..N) |num| {
         try list.append(@intCast(num));
@@ -126,7 +127,7 @@ const TimeTotal = struct {
     }
 };
 
-fn compute_total(comptime N: usize, comptime B: usize, comptime R: usize, times: [R]Timing) TimeTotal {
+fn compute_total(N: usize, B: usize, comptime R: usize, times: [R]Timing) TimeTotal {
     var total: TimeTotal = .{ .n = N, .b = B, };
     var max: i128 = times[0].elapsed_ns();
     var max_i: usize = 0;

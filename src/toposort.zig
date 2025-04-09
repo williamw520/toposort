@@ -532,6 +532,23 @@ test {
     try tests.benchmark(100000, 1, true, 6, .{ .add = true, .sort = true, .total = false });
     try tests.benchmark(1000000, 1, true, 6, .{ .add = true, .sort = true, .total = false });
 
+    std.debug.print("\nBenchmark increasing nodes on fixed branching, with max_range\n", .{});
+    try tests.benchmark(10000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(20000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(30000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(40000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(50000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(100000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(200000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(300000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(400000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(500000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(600000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(700000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(800000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(900000, 1000, true, 6, .{ .total = true });
+    try tests.benchmark(1000000, 1000, true, 6, .{ .total = true });
+
     std.debug.print("\nBenchmark increasing node and increasing link branching, with max_range\n", .{});
     try tests.benchmark(10000, 2, true, 6, .{ .total = true });
     try tests.benchmark(100000, 2, true, 6, .{ .total = true });
@@ -564,6 +581,13 @@ test {
     try tests.benchmark(10000, 5000, true, 6, .{});
     try tests.benchmark(100000, 5000, true, 6, .{});
     try tests.benchmark(1000000, 5000, true, 6, .{});
+
+    std.debug.print("\nBenchmark increasing node and increasing link branching, with max_range\n", .{});
+    for (1..5)|links| {
+        for (1..11)|nodes| {
+            try tests.benchmark(100000*nodes, 1000*links, true, 3, .{});
+        }
+    }
 
     std.debug.print("\nBenchmark increasing large link branching, with max_range\n", .{});
     try tests.benchmark(1000000, 100, true, 3, .{});
