@@ -1,7 +1,8 @@
 
 # TopoSort Algorithm - Set Based Topological Sort
 
-William Wong, 2025-04-02
+William Wong
+April 2, 2025
 
 ## Abstract
 
@@ -51,7 +52,7 @@ Remaining nodes are involved in cycles.
 
 ## 4. Example
 
-Given a graph G(V,E) with the nodes V=`{a, b, c, d, e, f}` and the links of 
+Given a graph G(V,E) with the nodes of V=`{a, b, c, d, e, f}` and the links of 
 E=`{ (a, d), (b, d), (d, c), (d, e), (e, f) }`, where `{a, b}` is the first root set,
 successively removing the root sets look like:
 
@@ -120,8 +121,8 @@ referred to as the `rooted` list, which records whether each node has ever been
 included in a root set.
 
 During the construction of successive root sets, the algorithm inspects 
-the immediate dependents of each root node. If a dependent node is encountered 
-that has already been marked as rooted, this indicates the presence of a 
+the immediate dependents of each root node. If a dependent node encountered 
+has already been marked as rooted, this indicates the presence of a 
 cycle — specifically, a back link from a node within the cycle to an earlier node already processed.
 
 Rather than terminating the algorithm upon cycle detection, such cases are handled 
@@ -187,8 +188,8 @@ must necessarily belong to a cycle, as it could not be reached without violating
 
 ## 8. Complexity Analysis
 
-The time complexity of the algorithm is O(∣N∣+∣L∣) for acyclic graphs, 
-where |N| denotes the number of nodes and |L| represents the number of links in the graph.
+The time complexity of the algorithm is O(∣N∣+∣E∣) for acyclic graphs, 
+where |N| denotes the number of nodes and |E| represents the number of links in the graph.
 
 The number of iterations in the main loop (labeled as step [1] in the algorithm) 
 is determined by the number of root sets identified in the graph. 
@@ -199,16 +200,33 @@ equals the number of nodes in the graph, the overall complexity of steps [1], [2
 
 The complexity of step [4], which processes the dependencies of each root node, 
 is dependent on the number of links in the graph. Since each link is considered 
-once during the process, the time complexity for step [4] is O(∣L∣).
+once during the process, the time complexity for step [4] is O(∣E∣).
 
-Therefore, the overall time complexity of the algorithm is O(∣N∣+∣L∣).
+Therefore, the overall time complexity of the algorithm is O(∣N∣+∣E∣).
 
 In terms of space complexity, the algorithm requires O(∣N∣) space to store the arrays 
 (incomings, rooted, current_root_set, next_root_set) for each node. Additionally, 
 an array of lists, dependents, is used to store the dependency relationships, 
-requiring O(∣L∣) space. Thus, the total space complexity is O(∣N∣+∣L∣).
+requiring O(∣E∣) space. Thus, the total space complexity is O(∣N∣+∣E∣).
 
 ## 9. Benchmark
 
-See benchmarks to check the result against the asymptotic predication.
-[Benchmark Runs](./README.md#benchmark-runs).
+[Benchmark Data](./README.md#benchmark-runs).
+
+This shows the times spent as the number of nodes in the graph increases.
+The number of links per node is fixed at 1000. 
+The trend is linear and fits the asymptotic complexity predication of O(|N|).
+![Time vs Nodes](./image/time-vs-nodes.png)
+
+This shows the times spent as the number of links per node in the graph increases.
+The number of nodes is fixed at 1,000,000. 
+The trend is linear and fits the asymptotic complexity predication of O(|E|).
+![Time vs Links](./image/time-vs-links.png)
+
+This shows the times spent as the number of links per node and number of nodes in the graph increase.
+The number of nodes is increased from 100,000 to 1,000,000, while the links per node increased
+from 1000 to 4000. Note that the slopes getting more steep as the links per node increase because
+each node has to spend more time processing its links.
+The trends are linear and fit the asymptotic complexity predication of O(|N| + |E|).
+![Time vs Nodes and Links](./image/time-vs-nodes-and-links.png)
+

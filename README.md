@@ -294,7 +294,7 @@ TopoSort comes with some benchmark tests.
  
 Run `zig build test -Doptimize=ReleaseFast` to run the benchmarks.
 
-Note that the benchmarks take couple minutes to run, especially for the debug mode bulid.
+Note that the benchmarks take a number of minutes to run, especially for the debug mode bulid.
 Comment out some benchmarks in the test section of toposort.zig for faster run.
 
 ### Benchmark Runs
@@ -305,7 +305,7 @@ plugged-in with the max power plan, on a single core since the benchmarks are si
 ---
 The first two sets of benchmarks check the effect of increasing the node counts in 10X factor, 
 with 1 link between nodes. Notice the times scaling up in locked steps with the node counts.
-The observation fits the asymptotic complexity predication of O(|N| + |L|).
+The observation fits the asymptotic complexity predication of O(|N| + |E|).
 See [Algorithm](./Algorithm.md).
 ```
 Benchmark increasing node in 10X scale on branching 1, with max_range
@@ -331,7 +331,7 @@ This is because the number of root sets goes down as more links fitted into the 
 so the number of root sets needed to be processed goes down.  Passed 2000 links, the time needed to 
 process the links in each root set starts to dominate.
 The times is still scaling up in locked steps with the node and link counts.
-The observation fits the asymptotic complexity predication of O(|N| + |L|).
+The observation fits the asymptotic complexity predication of O(|N| + |E|).
 ```
 Benchmark increasing node and increasing link branching, with max_range
  Add + Sort    10000 nodes      2 links, time:    1ms, 11015156 nodes/s,    90 ns/node.
@@ -360,12 +360,33 @@ Benchmark increasing node and increasing link branching, with max_range
  Add + Sort  1000000 nodes   5000 links, time:  210ms,  9493224 nodes/s,   105 ns/node.
 ```
 ---
+The following benchmarks examine the performance of the algorithm 
+with increasing nodes on a fixed link branching (1K).
+The times is scaling up linearly with the node counts.
+```
+Benchmark increasing nodes on fixed branching, with max_range
+ Add + Sort    10000 nodes   1000 links, repeat 5, time:    1ms, 12857767 nodes/s,    77 ns/node.
+ Add + Sort    20000 nodes   1000 links, repeat 5, time:    5ms,  7872404 nodes/s,   127 ns/node.
+ Add + Sort    30000 nodes   1000 links, repeat 5, time:    5ms, 11648268 nodes/s,    85 ns/node.
+ Add + Sort    40000 nodes   1000 links, repeat 5, time:    6ms, 12836517 nodes/s,    77 ns/node.
+ Add + Sort    50000 nodes   1000 links, repeat 5, time:    8ms, 12175433 nodes/s,    82 ns/node.
+ Add + Sort   100000 nodes   1000 links, repeat 5, time:   15ms, 12819214 nodes/s,    78 ns/node.
+ Add + Sort   200000 nodes   1000 links, repeat 5, time:   30ms, 12955633 nodes/s,    77 ns/node.
+ Add + Sort   300000 nodes   1000 links, repeat 5, time:   46ms, 12838140 nodes/s,    77 ns/node.
+ Add + Sort   400000 nodes   1000 links, repeat 5, time:   46ms, 17231931 nodes/s,    58 ns/node.
+ Add + Sort   500000 nodes   1000 links, repeat 5, time:   53ms, 18579224 nodes/s,    53 ns/node.
+ Add + Sort   600000 nodes   1000 links, repeat 5, time:   64ms, 18557144 nodes/s,    53 ns/node.
+ Add + Sort   700000 nodes   1000 links, repeat 5, time:   72ms, 19204589 nodes/s,    52 ns/node.
+ Add + Sort   800000 nodes   1000 links, repeat 5, time:   85ms, 18731564 nodes/s,    53 ns/node.
+ Add + Sort   900000 nodes   1000 links, repeat 5, time:   94ms, 19139920 nodes/s,    52 ns/node.
+ Add + Sort  1000000 nodes   1000 links, repeat 5, time:  106ms, 18817277 nodes/s,    53 ns/node.
+```
+---
 The following benchmarks check the increasing link counts on a fixed node count (1M).
 The times for link count are flat until about 2000 links, which is when the link
 processing starts to dominate the running time.
-The times is scaling up in locked steps with the link counts, 
-though not doubling as in the case of increasing nodes.
-The observation fits the asymptotic complexity predication of O(|N| + |L|).
+The times is scaling up linearly with the link counts.
+The observation fits the asymptotic complexity predication of O(|N| + |E|).
 Note that the time per node really suffers as each node has more links to process.
 ```
 Benchmark increasing large link branching, with max_range
