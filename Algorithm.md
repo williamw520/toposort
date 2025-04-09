@@ -6,12 +6,14 @@ April 2, 2025
 
 ## Abstract
 
-This presents TopoSort, a set-based topological sorting algorithm for directed acyclic graphs (DAG). 
-Unlike traditional algorithms that produce a linear order of nodes, TopoSort yields a linear 
+This presents a set-based topological sorting algorithm for directed acyclic graphs (DAG). 
+Unlike traditional algorithms that produce a linear order of nodes, it yields a linear 
 sequence of sets of nodes, where each set contains mutually independent nodes that can be 
-used for parallel processing. The layered approach reveals structural parallelism in the graph 
+used for parallel processing. It's a variant of Kahn's Algorithm that works on sets 
+instead of nodes. The layered approach reveals structural parallelism in the graph 
 and provides a built-in mechanism for detecting cycles. Further the nodes of the sets when 
 arranaged in a linear sequence according to the order of the sets are also in topological order.
+
 
 ## 1. Problem Definition
 
@@ -211,22 +213,23 @@ requiring O(∣E∣) space. Thus, the total space complexity is O(∣N∣+∣E�
 
 ## 9. Benchmark
 
-[Benchmark Data](./README.md#benchmark-runs).
+See [Benchmarks](./README.md#benchmarks) for running the benchmarks to get the data.
 
 This shows the times spent as the number of nodes in the graph increases.
 The number of links per node is fixed at 1000. 
 The trend is linear and fits the asymptotic complexity predication of O(|N|).
-![Time vs Nodes](./image/time-vs-nodes.png)
+<img src="./image/time-vs-nodes.png" alt="Time vs Nodes" width="800"/>
 
 This shows the times spent as the number of links per node in the graph increases.
 The number of nodes is fixed at 1,000,000. 
 The trend is linear and fits the asymptotic complexity predication of O(|E|).
-![Time vs Links](./image/time-vs-links.png)
+<img src="./image/time-vs-links.png" alt="Time vs Links" width="800"/>
 
 This shows the times spent as the number of links per node and number of nodes in the graph increase.
 The number of nodes is increased from 100,000 to 1,000,000, while the links per node increased
 from 1000 to 4000. Note that the slopes getting more steep as the links per node increase because
 each node has to spend more time processing its links.
 The trends are linear and fit the asymptotic complexity predication of O(|N| + |E|).
-![Time vs Nodes and Links](./image/time-vs-nodes-and-links.png)
+<img src="./image/time-vs-nodes-and-links.png" alt="Time vs Nodes and Links" width="800"/>
+
 
