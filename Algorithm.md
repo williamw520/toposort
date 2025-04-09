@@ -3,30 +3,56 @@
 
 William Wong, 2025-04-02
 
-The algorithm used in TopoSort produces a linear arranagement of sets of the nodes 
-of a graph in topological order, where the nodes in each set are dependence free 
-within the set. Further the nodes when lined up in the linear arrangement according 
-to the order of the sets are also in topological order.
+## Abstract
 
-It is a variant of the Kahn's algorithm, but it works on sets instead of individual nodes.
-It also finds the cyclic nodes as a side benefit.
+This presents TopoSort, a set-based topological sorting algorithm for directed acyclic graphs (DAG). 
+Unlike traditional algorithms that produce a linear order of nodes, TopoSort yields a linear 
+sequence of sets of nodes, where each set contains mutually independent nodes that can be 
+used for parallel processing. The layered approach reveals structural parallelism in the graph 
+and provides a built-in mechanism for detecting cycles. Further the nodes of the sets when 
+arranaged in a linear sequence according to the order of the sets are also in topological order.
 
-## Overview
+## 1. Problem Definition
 
-The main idea is to iteratively find the successive root sets of a graph after
-removing each set at each round.  Here's an outline of the algorithm.
+Given a directed graph G=(V,E) where V is the set of nodes and E⊆V×V is the set of directed links,
+we aim to compute a sequence of disjoint sets S=[S0, S1, …, Sk] such that:
+  1.  ∐ Si=V′, where V′⊆V contains all nodes not involved in a cycle.
+  2.  For all i<j, there is no link (u,v)∈E such that u∈Sj​ and v∈Si​.
+  3.  Nodes within any Si​ are mutually independent (i.e., no links between them).
 
-1. Find the first root set of the graph.
-2. Remove the nodes of the root set from the graph.
-3. Find the next root set.  Go to 2 until there's no more root node.
+Nodes not included in any Si​ are identified as participating in a cycle.
+
+## 2. Definitions
+
+  1.  In-degree: Number of incoming links to a node.
+  2.  Root node: A node with in-degree zero.
+  3.  Root set: A set of root nodes at a given iteration.
+
+## 3. Algorithm Overview
+
+The main idea is to iteratively find the successive root sets of the graph after
+removing each set at each round. 
+
+The algorithm proceeds in iterations. At each round, it extracts the current 
+root set (nodes with in-degree zero) and removes them from the graph. 
+Their removal may expose new root nodes, forming the next root set. 
+This process repeats until no new root nodes can be found.
+
+A simplified outline:
+
+ 1. Find the first root set of the graph.
+ 2. Remove the nodes of the root set from the graph.
+ 3. Find the next root set.  Go to 2 until there's no more root node.
 
 The successively removed root sets form a topological order. 
-The nodes within each root set are dependence free in the set.
+The nodes within each root set are mutually independent within the set.
+The union of all root sets covers the acyclic portion of the graph. 
+Remaining nodes are involved in cycles.
 
-## Example
+## 4. Example
 
-Given a graph with nodes `{a, b, c, d, e, f}` and with the dependency pairs of 
-`(a -> d) (b -> d) (d -> c) (d -> e) (e -> f)`, where `{a, b}` is the first root set,
+Given a graph G(V,E) with the nodes V=`{a, b, c, d, e, f}` and the links of 
+E=`{ (a, d), (b, d), (d, c), (d, e), (e, f) }`, where `{a, b}` is the first root set,
 successively removing the root sets look like:
 
 ```
@@ -35,106 +61,110 @@ successively removing the root sets look like:
 {a, b} {d} {c, e} | {f}
 {a, b} {d} {c, e} {f} |
 ```
+The final sequence of sets `[{a, b}, {d}, {c, e}, {f}]` forms a valid topological order 
+because each set contains nodes that do not depend on any nodes in the sets that follow.
 
-The sets `{a, b}`, `{d}`, `{c, e}`, `{f}` form a new graph, with the pairs of the sets 
-(`{a, b}` -> `{d}`), (`{d}` -> `{c, e}`), (`{c, e}` -> `{f}`) forming the dependence links between the sets. 
-The final order of the sets is a topological order since preceding sets have no 
-dependence on any of the sets coming after. Also the nodes of the preceding sets 
-have no dependence on any nodes in the sets coming after.
+## 5. Rationale
 
-## Rationale
+In any directed acyclic graph (DAG), there necessarily exists at least one node 
+with no incoming links — that is, a node that does not depend on any other node in the graph. 
+Such nodes are referred to as root nodes. In the given example above, nodes `a` and `b` 
+satisfy this condition and collectively constitute the initial root set of the graph, `{a, b}`.
 
-Definition 1: A topological order of the nodes of a directed acyclic graph (DAG)
-is a linear node arrangement that each node has no dependence on any other nodes coming after it.
+Removing the nodes in a root set from the graph reduces the in-degree of each of their 
+dependent nodes by one, effectively eliminating the corresponding incoming links. 
+Any node whose in-degree reaches zero as a result becomes a new root node, as it 
+no longer depends on any other node in the remaining graph. These newly uncovered 
+root nodes collectively form the next root set. For instance, in the example above, 
+node `{d}` becomes the root set after the first round.
 
-Definition 2: When a node y depends on node x, node y has an incoming link from x, 
-i.e. (x -> y). When node x is removed, the incoming link to y is removed as well.
+It follows that each root set extracted during the iterative process is independent 
+of all subsequent root sets. This is because the nodes within a given root set, 
+by construction, have no dependencies on any nodes that remain in the graph — 
+i.e., those nodes that will appear in later root sets.
 
-Definition 3: A root node in a graph is one that depends on no other nodes,
-i.e. it has no incoming link from others.
-
-Definition 4: A root set of a graph is a set consisting of only the root nodes,
-i.e. its members have no dependence on any remaining nodes in the graph.
-
-Definition 5: A set X has no dependence on the set Y when every member of set X has
-no dependence on any member of set Y. I.e. { x | x of X } -> { y | y of Y }, given
-none of y -> x.
-
-By the definition of a directed acyclic graph, there exist some nodes which depend on 
-no other nodes. E.g. `a` and `b` above. These are the root nodes of the graph [def 3], 
-where graph traversal begins. These form the root set of the graph [def 4]. E.g. `{a, b}`.
-
-Removing the nodes of a root set from the graph causes the remaining nodes
-depending on them to have one less dependence, i.e. their incoming links are removed
-by one and their counts of incoming links decremented.  The nodes with incoming links
-reaching 0 become the new root nodes now as they depend on no one [def 3].
-The new root nodes form for a new root set [def 4].  E.g. `{d}` above after the first round.
-
-It follows that each root set removed during the iteration has no dependence
-on any other root sets coming after it since its nodes have no dependence
-on the remaining nodes in the graph, which forms the subsequent root sets. [def 5].
-
-The successively removed root sets form a new graph with a dependency relationship
-where each preceding set has no dependence on the sets coming after. [def 5].
-The sequence of successively removed root sets in the new graph forms a topological order. [def 1].
+The sequence of root sets extracted through successive iterations induces a higher-level 
+graph structure, where each set can be viewed as a supernode. Directed links between 
+these sets reflect inter-set dependencies derived from the original graph. 
+In this induced graph, each set has no dependencies on any set that follows it 
+in the sequence, thereby forming a valid topological ordering at the set level.
 
 Q.E.D.
 
-### Dependence Free Subsets
+### 5a. Dependence Free Subsets
 
-The nodes in a root set have no dependence among themselves since root nodes 
-by definition depend on no other nodes [def 3]. The dependence free nodes in a set
-allow parallel processing within the scope of the set.
+Within each root set, the constituent nodes are mutually independent, 
+as root nodes by definition have no incoming links. This mutual independence 
+enables concurrent or parallel processing of the nodes within a set, 
+providing opportunities for efficient parallel computation.
 
-Subsequent root sets do depend on the previous root sets, thus serialized
-processing is still required among root sets following the topological order.
+Although nodes within a root set can be processed in parallel, 
+the root sets themselves must be handled sequentially, as each set may 
+depend on the completion of its predecessors in the topological sequence.
 
-### Topological Sorting of Nodes
+### 5b. Topological Sorting of Nodes
 
-When the nodes of all the root sets are lining up in the topological order
-of the root sets, they also form a topological order as well. Since the sets
-are in topological order, by [def 5] the nodes in the preceding set have no
-dependence on the following sets, thus the nodes are in topological order [def 1].
+When the nodes from all root sets are concatenated in the order in which 
+the sets were generated, the resulting sequence of nodes constitutes a 
+valid topological ordering of the original graph. This follows directly 
+from the fact that the root sets themselves are topologically ordered, 
+and thus the nodes in any given set do not depend on nodes in subsequent sets. 
+Further the nodes within each set are mutually independent.
+Consequently, the linearized sequence of nodes respects all dependency 
+constraints of the graph, satisfying the conditions of a topological sort.
 
-## Cyclic Node Detection
+## 6. Cyclic Node Detection
 
-A "rooted" list is used to track whether a node has become a root.
-When examining the immediate dependents of a root node to find the next set of roots,
-a dependent node found in the rooted list means it has become root before.
-That means a cycle exists in the graph linking an already rooted
-node as a dependent to another node.
+To facilitate cycle detection, the algorithm maintains a boolean array, 
+referred to as the `rooted` list, which records whether each node has ever been
+included in a root set.
 
-Instead of aborting the run, the traversing of the dependent node can be 
-merely skipped. This stops going into the cycle and continues with the rest of the nodes.
-A partial list of the topological order sets will be produced.
+During the construction of successive root sets, the algorithm inspects 
+the immediate dependents of each root node. If a dependent node is encountered 
+that has already been marked as rooted, this indicates the presence of a 
+cycle — specifically, a back link from a node within the cycle to an earlier node already processed.
 
-After the main iteration, any node not in the "rooted" list is part of a cycle
-since it's not reachable due to the prior cycle skipping logic.
+Rather than terminating the algorithm upon cycle detection, such cases are handled 
+by simply skipping the traversal of already-rooted dependent nodes. This approach 
+effectively bypasses the cyclic structure, allowing the algorithm to proceed with 
+the acyclic portion of the graph. As a result, a partial topological sort may still be obtained.
 
-## Algorithm Detail
+Upon completion of the algorithm, any node that has not been marked as rooted 
+must necessarily belong to a cycle, as it could not be reached without violating acyclicity.
 
-- For a graph with N nodes, assign each node a node id, ranging from 0 to N-1.
+## 7. Algorithm Detail
 
-- Let dependents = [0..N](id list), array of lists of node id.
-  Each element of the array corresponds to a node indexed by its node id. 
-  Each element is a list of node id depending on the node.
+- Given a directed acyclic graph with N nodes, assign each node a unique identifier, 
+  `id`, where id ∈ {0,1,…,N−1}.
 
-- Let incomings = [0..N] of integer, array of counts of the incoming links of the nodes.
-  Node ids are used as array index. Count of 0 means the node has been removed from the graph.
+- Define an array `dependents` of length N, where each element is a list of node id's
+  representing the nodes that are directly dependent on the node indexed by the 
+  corresponding element. In other words, `dependents[i]` contains the list of nodes 
+  that have incoming links from node i.
 
-- Let rooted = [0..N] of boolean, array of flags indicating whether a node has become root.
-  Initialize it to all falses. Node ids are used as array index.
+- Define an array `incomings` of length N, where each element is the in-degree for
+  the corresponding node indexed by the node id.  A value of zero indicates that 
+  the node has been removed from the graph.
 
-- Let current_root_set = list of id, list of node id of the current root set in the current round.
+- Define an array `rooted` of length N, with each element initialized to false. 
+  This array tracks whether a node has been included in any root set during the 
+  algorithm's execution. A value of true signifies that the node has been processed
+  as part of a root set.
 
-- Let next_root_set = list of id, the list of node id of the next root set in the next round.
+- Define a variable `current_root_set` to store the list of node id's representing 
+  the root set for the current round.  The root set consists of nodes that have no dependencies.
 
-- Let result = list of sets, holding the topologically sort sets. Initialize it to empty.
+- Define a variable `next_root_set` to temporarily store the set of root nodes identified
+  for the next round.
 
-- Find the initial root set by scanning the incomings array for 0 count entries.
-  Collect the found node id and add them to current_root_set.
+- Define a variable `result` as a list of sets, initially empty, which will hold the 
+  final topologically sorted root sets.
 
-- Run the loop.
+- Initialize the first root set by scanning the `incomings` array to find nodes with 
+  zero incoming links. Add these nodes to the `current_root_set`.
+
+- Execute the iteration loop to identify and remove root sets from the graph, 
+  updating result with each successive root set.
 ```
     while current_root_set is not empty         [1]
         append the current_root_set to result
@@ -155,35 +185,30 @@ since it's not reachable due to the prior cycle skipping logic.
 - Scan the rooted array to find the set of cyclic nodes.
   Any node that has not been rooted is in a cycle.
 
-## Complexity Analysis
+## 8. Complexity Analysis
 
-The time complexity of the algorithm is O(|N| + |L|) for acyclic graphs, 
-where |N| is the number of nodes and |L| is the number of links. 
+The time complexity of the algorithm is O(∣N∣+∣L∣) for acyclic graphs, 
+where |N| denotes the number of nodes and |L| represents the number of links in the graph.
 
-The run count of `[1]` above is the number of root sets found in the graph, 
-and the run counts of `[2]` and `[3]` are the number of nodes in each root set.
-The total run count of them is |`[1]`| * (|`[2]`| + |`[3]`|), which is in 
-the order of the total number of nodes in the root sets.
+The number of iterations in the main loop (labeled as step [1] in the algorithm) 
+is determined by the number of root sets identified in the graph. 
+Each iteration processes the nodes in the current root set. 
+The complexity of steps [2] and [3] is proportional to the number of nodes 
+in each root set. Since the total number of nodes across all root sets 
+equals the number of nodes in the graph, the overall complexity of steps [1], [2], and [3] is O(∣N∣).
 
-The root sets partition the graph, thus the total number of nodes in
-all the root sets is the number of nodes in the graph. Thus the complexity
-of `[1]`, `[2]`, and `[3]` is O(|N|).
+The complexity of step [4], which processes the dependencies of each root node, 
+is dependent on the number of links in the graph. Since each link is considered 
+once during the process, the time complexity for step [4] is O(∣L∣).
 
-The run count of `[4]` is the number of links in each root node only, not
-the number of links for every node. The number of links of all root sets
-added up to be in the order of the total links.  The complexity is O(|L|).
+Therefore, the overall time complexity of the algorithm is O(∣N∣+∣L∣).
 
-Thus the overal runtime complexity is O(|N| + |L|).
+In terms of space complexity, the algorithm requires O(∣N∣) space to store the arrays 
+(incomings, rooted, current_root_set, next_root_set) for each node. Additionally, 
+an array of lists, dependents, is used to store the dependency relationships, 
+requiring O(∣L∣) space. Thus, the total space complexity is O(∣N∣+∣L∣).
 
-The space complexity of the algorithm is O(|N| + |L|) for acyclic graphs.
-We need O(|N|) for storing the various |N| lengh arrays, and need O(|L|)
-to store the `dependents` array.
-
-Note that for the degenerate case of a complete graph where every node
-depends on every other node, the space complexity becomes O(|N|^2) 
-since every element of the `dependents` array has |N| nodes.
-
-## Benchmark
+## 9. Benchmark
 
 See benchmarks to check the result against the asymptotic predication.
 [Benchmark Runs](./README.md#benchmark-runs).
