@@ -294,7 +294,7 @@ TopoSort comes with some benchmark tests.
  
 Run `zig build test -Doptimize=ReleaseFast` to run the benchmarks.
 
-Note that the benchmarks take a number of minutes to run, especially for the debug mode bulid.
+Note that the benchmarks take a number of minutes to run, especially for the debug mode build.
 Comment out some benchmarks in the test section of toposort.zig for faster run.
 
 ### Benchmark Runs
