@@ -67,9 +67,9 @@ pub fn benchmark(N: usize, B: usize, comptime M: bool, comptime R: usize,
 
 
 fn gen_int_items(N: usize, comptime T: type, allocator: Allocator) !ArrayList(T) {
-    var list = ArrayList(T).init(allocator);
+    var list: ArrayList(T) = .empty;
     for (0..N) |num| {
-        try list.append(@intCast(num));
+        try list.append(allocator, @intCast(num));
     }
     return list;
 }

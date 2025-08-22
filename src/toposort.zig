@@ -36,7 +36,7 @@ pub fn TopoSort(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.data.deinit_obj(self.allocator);
+            self.data.deinit_obj();
             self.allocator.destroy(self.data);
         }
 
@@ -47,7 +47,7 @@ pub fn TopoSort(comptime T: type) type {
             const dep_id    = try self.data.add_node(dependent);
             const lead_id   = if (leading) |lead| try self.data.add_node(lead) else null;
             const dep_pair  = Dependency { .lead_id = lead_id, .dep_id = dep_id };
-            try self.data.dependencies.append(dep_pair);
+            try self.data.dependencies.append(self.allocator, dep_pair);
             if (self.data.verbose) try self.print_dependency(leading, dependent);
         }
 
@@ -135,12 +135,12 @@ pub fn TopoSort(comptime T: type) type {
         fn run_algorithm(self: *Self, incomings: []u32, rooted: []bool) !void {
             // Double-buffer to hold the root sets of the graph for each round.
             // Root nodes have no incoming leading links, i.e. they depend on no one.
-            var curr_root = ArrayList(u32).init(self.allocator);
-            var next_root = ArrayList(u32).init(self.allocator);
-            defer curr_root.deinit();
-            defer next_root.deinit();
+            var curr_root: ArrayList(u32) = .empty;
+            var next_root: ArrayList(u32) = .empty;
+            defer curr_root.deinit(self.allocator);
+            defer next_root.deinit(self.allocator);
 
-            try scan_zero_incoming(incomings, &curr_root);  // find the initial root set.
+            try self.scan_zero_incoming(incomings, &curr_root); // find the initial root set.
             try self.save_root_set(curr_root);              // the real root set of the graph.
             while (curr_root.items.len > 0) {
                 try self.emit_sorted_set(curr_root);        // emit the non-dependent set.
@@ -151,7 +151,7 @@ pub fn TopoSort(comptime T: type) type {
                         if (rooted[dep_id])                 // dependent was a root node already.
                             continue;                       // cycle detected; skip.
                         incomings[dep_id] -= 1;
-                        if (incomings[dep_id] == 0) try next_root.append(dep_id);
+                        if (incomings[dep_id] == 0) try next_root.append(self.allocator, dep_id);
                     }
                 }
                 std.mem.swap(ArrayList(u32), &curr_root, &next_root);
@@ -168,11 +168,11 @@ pub fn TopoSort(comptime T: type) type {
                 if (dep.lead_id) |lead_id| {
                     var leads_dependents = &self.data.dependents[lead_id];
                     if (null == indexOfScalar(u32, leads_dependents.items, dep.dep_id)) {
-                        try leads_dependents.append(dep.dep_id);
+                        try leads_dependents.append(self.allocator, dep.dep_id);
                     }
                     var deps_leaders = &self.data.leaders[dep.dep_id];
                     if (null == indexOfScalar(u32, deps_leaders.items, lead_id)) {
-                        try deps_leaders.append(lead_id);
+                        try deps_leaders.append(self.allocator, lead_id);
                     }
                 }
             }
@@ -187,32 +187,32 @@ pub fn TopoSort(comptime T: type) type {
             }
         }
 
-        fn scan_zero_incoming(incomings: [] const u32, found: *ArrayList(u32)) !void {
+        fn scan_zero_incoming(self: *Self, incomings: [] const u32, found: *ArrayList(u32)) !void {
             for (incomings, 0..) |count, id| {
-                if (count == 0) try found.append(@intCast(id));
+                if (count == 0) try found.append(self.allocator, @intCast(id));
             }
         }
 
         // Save the root set to the entire graph.
         fn save_root_set(self: *Self, root_set: ArrayList(u32)) !void {
             self.data.root_set_id.clearRetainingCapacity();
-            try self.data.root_set_id.appendSlice(root_set.items);
+            try self.data.root_set_id.appendSlice(self.allocator, root_set.items);
         }
 
         // Save the root set in the topological order result.
         fn emit_sorted_set(self: *Self, curr_root: ArrayList(u32)) !void {
-            var sorted_set = ArrayList(T).init(self.allocator);
+            var sorted_set: ArrayList(T) = .empty;
             for (curr_root.items) |id| {
-                try sorted_set.append(self.data.get_node(id));
+                try sorted_set.append(self.allocator, self.data.get_node(id));
             }
-            try self.data.sorted_sets.append(sorted_set);
+            try self.data.sorted_sets.append(self.allocator, sorted_set);
         }
 
         fn collect_cyclic_nodes(self: *Self, rooted: []bool) !void {
             self.data.cycle.clearRetainingCapacity();
             for (rooted, 0..) |flag, id| {
                 // Node not rooted was skipped in run_algorithm() due to cycle detected.
-                if (!flag) try self.data.cycle.append(@intCast(id));
+                if (!flag) try self.data.cycle.append(self.allocator, @intCast(id));
             }
         }
 
@@ -324,11 +324,12 @@ pub fn SortResult(comptime T: type) type {
 
         /// Copy the topologically sorted nodes into the ArrayList provided by caller.
         /// Return the caller provided list.
-        pub fn get_sorted_list(self: Self, list: *ArrayList(T)) !*ArrayList(T) {
+        pub fn get_sorted_list(self: Self, allocator: Allocator) !ArrayList(T) {
+            var sorted_list: ArrayList(T) = .empty;
             for (self.get_sorted_sets().items) |set| {
-                for (set.items) |node| try list.append(node);
+                for (set.items) |node| try sorted_list.append(allocator, node);
             }
-            return list;
+            return sorted_list;
         }
 
         /// Report whether the graph has cycle(s).
@@ -399,6 +400,7 @@ fn Data(comptime T: type) type {
     return struct {
         const Self = @This();
 
+        allocator:      Allocator,
         max_range:      ?usize,                     // preset max range of numeric nodes.
         unique_nodes:   ArrayList(T),               // the node list, without duplicates.
         node_map:       NodeMap,                    // maps node to sequential id.
@@ -412,52 +414,53 @@ fn Data(comptime T: type) type {
         verbose:        bool = false,
 
         fn init_obj(self: *Self, allocator: Allocator, max_range: ?usize, verbose: bool) !void {
+            self.allocator = allocator;
             self.max_range = max_range;
             self.verbose = verbose;
-            self.dependencies = ArrayList(Dependency).init(allocator);
+            self.dependencies = .empty;
             self.node_map = NodeMap.init(allocator);
             self.node_num_map = try allocator.alloc(?u32, if (max_range)|n| n+1 else 0);
-            self.unique_nodes = ArrayList(T).init(allocator);
+            self.unique_nodes = .empty;
             self.dependents = try allocator.alloc(ArrayList(u32), 0);
             self.leaders = try allocator.alloc(ArrayList(u32), 0);
-            self.sorted_sets = ArrayList(ArrayList(T)).init(allocator);
-            self.cycle = ArrayList(u32).init(allocator);
-            self.root_set_id = ArrayList(u32).init(allocator);
+            self.sorted_sets = .empty;
+            self.cycle = .empty;
+            self.root_set_id = .empty;
             @memset(self.node_num_map, null);
         }
 
-        fn deinit_obj(self: *Self, allocator: Allocator) void {
-            self.cycle.deinit();
-            self.root_set_id.deinit();
+        fn deinit_obj(self: *Self) void {
+            self.cycle.deinit(self.allocator);
+            self.root_set_id.deinit(self.allocator);
             self.free_sorted_sets();
-            self.dependencies.deinit();
-            self.free_dependents(allocator);
-            self.free_leaders(allocator);
+            self.dependencies.deinit(self.allocator);
+            self.free_dependents();
+            self.free_leaders(self.allocator);
             self.node_map.deinit();
-            allocator.free(self.node_num_map);
-            self.unique_nodes.deinit();
+            self.allocator.free(self.node_num_map);
+            self.unique_nodes.deinit(self.allocator);
         }
 
         fn free_sorted_sets(self: *Self) void {
-            for (self.sorted_sets.items) |list| list.deinit();
-            self.sorted_sets.deinit();
+            for (self.sorted_sets.items) |*list| list.deinit(self.allocator);
+            self.sorted_sets.deinit(self.allocator);
         }            
 
-        fn free_dependents(self: *Self, allocator: Allocator) void {
-            for (self.dependents) |dep_list| dep_list.deinit();
-            allocator.free(self.dependents);
+        fn free_dependents(self: *Self) void {
+            for (self.dependents) |*dep_list| dep_list.deinit(self.allocator);
+            self.allocator.free(self.dependents);
         }
 
         fn free_leaders(self: *Self, allocator: Allocator) void {
-            for (self.leaders) |lead_list| lead_list.deinit();
+            for (self.leaders) |*lead_list| lead_list.deinit(self.allocator);
             allocator.free(self.leaders);
         }
 
         fn realloc_dependents(self: *Self, allocator: Allocator) !void {
-            self.free_dependents(allocator);
+            self.free_dependents();
             self.dependents = try allocator.alloc(ArrayList(u32), self.node_count());
             for (0..self.dependents.len) |i| {
-                self.dependents[i] = ArrayList(u32).init(allocator);
+                self.dependents[i] = .empty;
             }
         }
 
@@ -465,7 +468,7 @@ fn Data(comptime T: type) type {
             self.free_leaders(allocator);
             self.leaders = try allocator.alloc(ArrayList(u32), self.node_count());
             for (0..self.leaders.len) |i| {
-                self.leaders[i] = ArrayList(u32).init(allocator);
+                self.leaders[i] = .empty;
             }
         }
 
@@ -494,7 +497,7 @@ fn Data(comptime T: type) type {
                 return node_id;
             } else {
                 const new_id: u32 = @intCast(self.node_count());
-                try self.unique_nodes.append(input_node);
+                try self.unique_nodes.append(self.allocator, input_node);
                 if (@typeInfo(T) == .int and self.max_range != null) {
                     self.node_num_map[@intCast(input_node)] = new_id;
                 } else {
@@ -582,40 +585,40 @@ test {
     try tests.benchmark(100000, 5000, true, 6, .{});
     try tests.benchmark(1000000, 5000, true, 6, .{});
 
-    std.debug.print("\nBenchmark increasing node and increasing link branching, with max_range\n", .{});
-    for (1..5)|links| {
-        for (1..11)|nodes| {
-            try tests.benchmark(100000*nodes, 1000*links, true, 3, .{});
-        }
-    }
+    // std.debug.print("\nBenchmark increasing node and increasing link branching, with max_range\n", .{});
+    // for (1..5)|links| {
+    //     for (1..11)|nodes| {
+    //         try tests.benchmark(100000*nodes, 1000*links, true, 3, .{});
+    //     }
+    // }
 
-    std.debug.print("\nBenchmark increasing large link branching, with max_range\n", .{});
-    try tests.benchmark(1000000, 100, true, 3, .{});
-    try tests.benchmark(1000000, 200, true, 3, .{});
-    try tests.benchmark(1000000, 300, true, 3, .{});
-    try tests.benchmark(1000000, 400, true, 3, .{});
-    try tests.benchmark(1000000, 500, true, 3, .{});
-    try tests.benchmark(1000000, 600, true, 3, .{});
+    // std.debug.print("\nBenchmark increasing large link branching, with max_range\n", .{});
+    // try tests.benchmark(1000000, 100, true, 3, .{});
+    // try tests.benchmark(1000000, 200, true, 3, .{});
+    // try tests.benchmark(1000000, 300, true, 3, .{});
+    // try tests.benchmark(1000000, 400, true, 3, .{});
+    // try tests.benchmark(1000000, 500, true, 3, .{});
+    // try tests.benchmark(1000000, 600, true, 3, .{});
     
-    try tests.benchmark(1000000, 1000, true, 3, .{});
-    try tests.benchmark(1000000, 2000, true, 3, .{});
-    try tests.benchmark(1000000, 3000, true, 3, .{});
-    try tests.benchmark(1000000, 4000, true, 3, .{});
-    try tests.benchmark(1000000, 5000, true, 3, .{});
-    try tests.benchmark(1000000, 6000, true, 3, .{});
+    // try tests.benchmark(1000000, 1000, true, 3, .{});
+    // try tests.benchmark(1000000, 2000, true, 3, .{});
+    // try tests.benchmark(1000000, 3000, true, 3, .{});
+    // try tests.benchmark(1000000, 4000, true, 3, .{});
+    // try tests.benchmark(1000000, 5000, true, 3, .{});
+    // try tests.benchmark(1000000, 6000, true, 3, .{});
     
-    try tests.benchmark(1000000, 10000, true, 3, .{});
-    try tests.benchmark(1000000, 20000, true, 3, .{});
-    try tests.benchmark(1000000, 30000, true, 3, .{});
-    try tests.benchmark(1000000, 40000, true, 3, .{});
-    try tests.benchmark(1000000, 50000, true, 3, .{});
-    try tests.benchmark(1000000, 60000, true, 3, .{});
+    // try tests.benchmark(1000000, 10000, true, 3, .{});
+    // try tests.benchmark(1000000, 20000, true, 3, .{});
+    // try tests.benchmark(1000000, 30000, true, 3, .{});
+    // try tests.benchmark(1000000, 40000, true, 3, .{});
+    // try tests.benchmark(1000000, 50000, true, 3, .{});
+    // try tests.benchmark(1000000, 60000, true, 3, .{});
     
-    try tests.benchmark(1000000, 100000, true, 3, .{});
-    try tests.benchmark(1000000, 200000, true, 3, .{});
-    try tests.benchmark(1000000, 300000, true, 3, .{});
-    try tests.benchmark(1000000, 400000, true, 3, .{});
-    try tests.benchmark(1000000, 500000, true, 3, .{});
+    // try tests.benchmark(1000000, 100000, true, 3, .{});
+    // try tests.benchmark(1000000, 200000, true, 3, .{});
+    // try tests.benchmark(1000000, 300000, true, 3, .{});
+    // try tests.benchmark(1000000, 400000, true, 3, .{});
+    // try tests.benchmark(1000000, 500000, true, 3, .{});
     
 }
 

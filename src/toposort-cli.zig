@@ -141,9 +141,9 @@ fn dump_ordered(comptime T: type, result: SortResult(T)) !void {
     std.debug.print(" ]\n", .{});
 
     std.debug.print("  Topologically sorted list: [ ", .{});
-    var sorted_list = ArrayList(T).init(g_allocator);
-    defer sorted_list.deinit();
-    for ((try result.get_sorted_list(&sorted_list)).items) |node| {
+    var sorted_list = try result.get_sorted_list(g_allocator);
+    defer sorted_list.deinit(g_allocator);
+    for (sorted_list.items) |node| {
         dump_node(T, node);
     }
     std.debug.print("]\n", .{});
