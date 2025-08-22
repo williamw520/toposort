@@ -1,5 +1,9 @@
 # TopoSort - Set Based Topological Sort
 
+**Note: TopoSort has been migrated to use Zig 0.15.1. See 
+[Zig 0.15.1 release notes](https://ziglang.org/download/0.15.1/release-notes.html)
+for any breaking changes.**
+
 TopoSort is a highly efficient Zig library for performing topological sort on dependency graph. 
 It uses a novel set based approach for finding the topological order.
 This small library is packed with the following features:
